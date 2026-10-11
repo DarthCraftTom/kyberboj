@@ -1,0 +1,6 @@
+id,type,question,answer_1,answer_2,answer_3,answer_4,correct_answer,time
+1,number,Kolik znakù má mít minimálnì velmi bezpeèné heslo?,,,,16,25
+2,normal,Které heslo je nejbezpeènìjší?,123456,heslo2024,MojeTajneHeslo,TrPAslik-sKace-12,4,20
+3,true/false,Nikdy bych nemìl posílat citlivé údaje pøes veøejnou Wi-Fi.,Pravda,Nepravda,,,1,15
+4,normal,Co je to phishing?,Rychlé stahování her,Krádež identity pøes podvodný email,Herní cheat na Robloxu,Antivirus,2,20
+5,true/false,Na veøejné Wi-Fi bez hesla bych nemìl nakupovat kartou.,Pravda,Nepravda,,,1,15

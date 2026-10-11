@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KyberBoj: Hackeři vs. Ochránci</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cyberBase: '#1e293b',
+                        cyberBg: '#0f172a',
+                        cyberAccent: '#06b6d4',
+                        hackerRed: '#ef4444',
+                        defenderBlue: '#3b82f6',
+                        ansRed: '#e3342f',
+                        ansBlue: '#3490dc',
+                        ansYellow: '#f6993f',
+                        ansGreen: '#38c172',
+                        correctGreen: '#22c55e'
+                    },
+                    fontFamily: {
+                        tech: ['"Chakra Petch"', 'sans-serif'],
+                        sans: ['"Inter"', 'Helvetica', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f1f5f9;
+            background-image: linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+            overflow-x: hidden;
+        }
+        .glow-border { box-shadow: 0 0 15px rgba(6, 182, 212, 0.3); border: 1px solid rgba(6, 182, 212, 0.5); }
+        .glow-text { text-shadow: 0 0 15px rgba(6, 182, 212, 0.8); }
+        .screen-hidden { display: none !important; }
+        
+        .cz-region { fill: #475569; stroke: #0f172a; stroke-width: 3.5; stroke-linejoin: round; stroke-linecap: round; transition: all 0.4s ease; cursor: default; }
+        .cz-region.red { fill: #ef4444; filter: drop-shadow(0 0 12px rgba(239,68,68,0.8)); }
+        .cz-region.blue { fill: #3b82f6; filter: drop-shadow(0 0 12px rgba(59,130,246,0.8)); }
+        
+        .answer-btn { position: relative; overflow: hidden; transition: transform 0.1s, opacity 0.3s; display: flex; align-items: center; justify-content: center; }
+        .answer-btn:active { transform: scale(0.95); }
+        .answer-btn.disabled { opacity: 0.5; pointer-events: none; }
+        .answer-btn.selected { border: 6px solid white; transform: scale(1.05); }
+
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        .glitch-anim { animation: glitch 0.2s infinite; }
+        @keyframes radar { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        .animate-radar { animation: radar 1.5s ease-out infinite; }
+        
+        /* Skrytí šipek u číselného inputu */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-cyberAccent selection:text-white relative">
+
+    <!-- OBRAZOVKA 1: PŘIPOJENÍ -->
+    <main id="screen-join" class="flex-1 flex flex-col items-center justify-center p-4 relative z-10">
+        <div class="mb-8 text-center">
+            <div class="flex justify-center mb-3"><i data-lucide="shield-half" class="w-20 h-20 text-cyberAccent drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]"></i></div>
+            <h1 class="text-5xl md:text-7xl font-tech font-bold tracking-wider text-white glow-text uppercase">Kyber<span class="text-cyberAccent">Boj</span></h1>
+            <p class="text-slate-400 mt-2 font-tech tracking-wide text-xl">Hackeři vs. Ochránci</p>
+        </div>
+
+        <div class="bg-cyberBase/90 backdrop-blur-sm p-8 rounded-2xl w-full max-w-md glow-border shadow-2xl transition-all duration-300" id="login-container">
+            <div id="phase-code" class="space-y-5">
+                <div>
+                    <label for="join-code" class="block text-sm font-medium text-slate-300 mb-1.5 font-tech uppercase tracking-wide text-center">Zadej kód hry</label>
+                    <input type="text" id="join-code" placeholder="Např. A7K9" autocomplete="off" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-cyberAccent focus:ring-1 focus:ring-cyberAccent transition uppercase font-tech text-4xl text-center tracking-widest">
+                </div>
+                <div id="code-error" class="text-red-400 text-sm hidden font-medium text-center bg-red-900/20 py-2 rounded border border-red-900/50">Hra s tímto kódem neexistuje!</div>
+                <button onclick="verifyGameCode()" id="btn-verify-code" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 px-4 rounded-lg transition duration-200 uppercase tracking-wide font-tech text-xl flex justify-center items-center gap-2">
+                    <span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <div id="phase-name" class="space-y-5 hidden">
+                <div class="bg-slate-800/50 p-3 rounded-lg border border-slate-700 text-center mb-2">
+                    <span class="text-slate-400 text-sm font-tech">Nalezená hra:</span> <span id="found-code-display" class="text-cyberAccent font-bold font-tech text-xl ml-2">----</span>
+                </div>
+                <div>
+                    <label for="join-name" class="block text-sm font-medium text-slate-300 mb-1.5 font-tech uppercase tracking-wide">Tvé jméno / Přezdívka</label>
+                    <input type="text" id="join-name" placeholder="Zadej své jméno..." autocomplete="off" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-cyberAccent focus:ring-1 focus:ring-cyberAccent transition font-bold text-xl text-center">
+                </div>
+                <div id="name-error" class="text-red-400 text-sm hidden font-medium text-center"></div>
+                <button onclick="studentJoinGame()" id="btn-join" class="w-full bg-cyberAccent hover:bg-cyan-400 text-slate-900 font-bold py-4 px-4 rounded-lg transition duration-200 uppercase tracking-wide font-tech text-xl shadow-[0_0_15px_rgba(6,182,212,0.4)] flex justify-center items-center gap-2">
+                    <span>Vstoupit do hry</span> <i data-lucide="zap" class="w-6 h-6"></i>
+                </button>
+                <button onclick="backToCodePhase()" class="w-full text-slate-500 hover:text-slate-300 text-sm transition mt-2 font-medium">Zadat jiný kód</button>
+            </div>
+        </div>
+        <div class="mt-8"><button onclick="openTeacherLogin()" class="text-slate-500 hover:text-cyberAccent text-sm font-medium transition flex items-center gap-2"><i data-lucide="server" class="w-4 h-4"></i> Hostovat hru (pro učitele)</button></div>
+    </main>
+
+    <!-- MODÁL: UČITELSKÉ HESLO -->
+    <div id="modal-teacher-login" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center screen-hidden">
+        <div class="bg-cyberBase border border-slate-600 p-6 rounded-xl w-full max-w-sm shadow-2xl">
+            <h2 class="text-xl font-tech font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-cyberAccent"></i> Autorizace učitele</h2>
+            <p class="text-sm text-slate-400 mb-4">Pro založení hry zadej administrátorské heslo.</p>
+            <input type="password" id="teacher-password" placeholder="Heslo..." class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-white mb-2 focus:outline-none focus:border-cyberAccent transition">
+            <div id="login-error" class="text-red-400 text-sm hidden mb-4 font-medium">Nesprávné heslo!</div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="closeTeacherLogin()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition font-medium">Zrušit</button>
+                <button onclick="verifyTeacherLogin()" class="flex-1 bg-cyberAccent hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded-lg transition">Ověřit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OBRAZOVKA 2: UČITELSKÉ LOBBY -->
+    <main id="screen-teacher-lobby" class="flex-1 flex flex-col p-4 md:p-8 screen-hidden h-screen">
+        <div class="max-w-5xl w-full mx-auto flex flex-col h-full bg-cyberBase/50 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+            <div class="bg-slate-900/80 border-b border-slate-700 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-tech text-2xl text-white font-bold tracking-wider">Lobby Učitele</h2>
+                    <p class="text-sm text-slate-400">Nechť se žáci připojí pomocí kódu...</p>
+                </div>
+                <div class="flex items-center gap-4 bg-slate-800/80 px-6 py-3 rounded-xl border border-slate-600 shadow-lg">
+                    <span class="text-slate-400 font-tech uppercase text-sm">Kód hry:</span>
+                    <span id="display-game-code" class="text-5xl font-tech font-bold text-cyberAccent tracking-widest glow-text cursor-default">----</span>
+                    <button onclick="toggleFullscreenCode()" class="ml-2 text-slate-400 hover:text-white transition transform hover:scale-110" title="Zvětšit na projektor"><i data-lucide="maximize" class="w-8 h-8"></i></button>
+                </div>
+            </div>
+
+            <!-- Načtení CSV -->
+            <div class="bg-slate-800 p-4 border-b border-slate-700 flex flex-col md:flex-row items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="bg-slate-700 p-3 rounded-lg"><i data-lucide="database" class="text-cyberAccent w-6 h-6"></i></div>
+                    <div>
+                        <p class="font-tech font-bold text-white text-sm uppercase tracking-wide">Sada otázek</p>
+                        <p id="csv-status" class="text-xs text-red-400 mt-1 font-bold">Nevybráno. Ujistěte se, že máte CSV UTF-8.</p>
+                    </div>
+                </div>
+                <div class="mt-3 md:mt-0 flex gap-2">
+                    <select id="server-csv-select" class="bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white font-medium focus:outline-none focus:border-cyberAccent">
+                        <option value="">-- Vyberte sadu otázek ze serveru --</option>
+                        <option value="otazky_testy.csv">Testovací sada TEST</option>
+                        <option value="otazky_kyber.csv">Kyberbezpečnost (ZŠ)</option>
+                    </select>
+                    <button onclick="loadServerCSV()" class="bg-slate-700 hover:bg-slate-600 text-white py-2 px-6 rounded-lg border border-slate-500 transition font-bold flex items-center gap-2">
+                        <i data-lucide="download" class="w-5 h-5"></i> Načíst
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-tech text-xl text-white">Připojení studenti</h3>
+                    <div class="text-sm bg-slate-800 px-4 py-1.5 rounded-full text-white font-bold border border-slate-700 shadow-inner">
+                        <i data-lucide="users" class="w-4 h-4 inline-block mr-1 text-cyberAccent"></i> <span id="player-count">0</span>
+                    </div>
+                </div>
+                <div id="players-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+            </div>
+
+            <div class="bg-slate-900/80 border-t border-slate-700 p-6 flex justify-between items-center">
+                <div class="text-sm text-slate-500 font-medium" id="lobby-warning">Před startem načtěte CSV.</div>
+                <button id="btn-start-game" disabled onclick="teacherStartGame()" class="bg-cyberAccent/30 text-slate-900/50 cursor-not-allowed font-bold py-4 px-10 rounded-xl uppercase tracking-widest font-tech flex items-center gap-2 transition text-lg">
+                    <i data-lucide="play" class="w-6 h-6"></i> Spustit Hru
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- FULLSCREEN KÓD -->
+    <div id="overlay-fullscreen-code" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center screen-hidden">
+        <button onclick="toggleFullscreenCode()" class="absolute top-8 right-8 text-slate-400 hover:text-white p-2 bg-slate-800 rounded-lg transition"><i data-lucide="x" class="w-10 h-10"></i></button>
+        <div class="text-center">
+            <p class="text-3xl md:text-4xl text-slate-400 font-tech uppercase tracking-widest mb-6">Připojte se na webu přes kód:</p>
+            <div id="fullscreen-code-text" class="text-[15vw] font-tech font-bold text-cyberAccent glow-text leading-none tracking-widest border-4 border-cyberAccent/50 rounded-3xl px-16 py-10 bg-slate-800/80 backdrop-blur-md shadow-[0_0_50px_rgba(6,182,212,0.3)]">----</div>
+        </div>
+    </div>
+
+    <!-- OBRAZOVKA 3: STUDENTSKÁ ČEKÁRNA -->
+    <main id="screen-student-lobby" class="flex-1 flex flex-col items-center justify-center p-4 screen-hidden">
+        <div id="student-lobby-box" class="text-center max-w-md w-full bg-cyberBase border border-slate-600 rounded-3xl p-10 shadow-2xl transition-all duration-700 transform scale-100">
+            <div class="relative w-32 h-32 mx-auto mb-8" id="student-spinner">
+                <div class="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-cyberAccent rounded-full border-t-transparent animate-spin"></div>
+                <i data-lucide="wifi" class="absolute inset-0 m-auto w-12 h-12 text-cyberAccent animate-pulse"></i>
+            </div>
+            <h2 id="student-status-title" class="text-3xl font-tech font-bold text-white mb-2">Připojeno!</h2>
+            <p id="student-status-text" class="text-slate-400 mb-8 text-lg">Čekej, než učitel odstartuje hru...</p>
+            <div class="bg-slate-900/80 rounded-xl p-5 border border-slate-700 shadow-inner">
+                <p class="text-xs text-slate-500 uppercase font-tech tracking-wider mb-1">Tvá přezdívka</p>
+                <p id="display-student-name" class="text-2xl font-bold text-white font-sans">Přezdívka</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- OBRAZOVKA 4: UČITEL - HRA -->
+    <main id="screen-teacher-game" class="flex-1 flex flex-col p-4 screen-hidden h-screen bg-slate-900 relative">
+        <div class="absolute top-4 left-4 flex gap-4 z-10">
+            <div class="bg-slate-800/90 backdrop-blur border border-slate-600 rounded-lg px-5 py-3 text-white font-tech shadow-lg text-lg">Otázka: <span id="ui-q-num" class="text-cyberAccent font-bold">1</span>/<span id="ui-q-total">10</span></div>
+            <div class="bg-slate-800/90 backdrop-blur border border-slate-600 rounded-lg px-5 py-3 text-white font-tech shadow-lg text-lg font-bold"><span class="text-hackerRed drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" id="ui-score-red">0</span> <span class="mx-2 text-slate-500">vs</span> <span class="text-defenderBlue drop-shadow-[0_0_5px_rgba(59,130,246,0.8)]" id="ui-score-blue">0</span></div>
+        </div>
+        <div class="absolute top-4 right-4 bg-slate-800/90 backdrop-blur border border-slate-600 rounded-lg px-5 py-3 flex items-center gap-3 z-10 shadow-lg">
+            <i data-lucide="clock" class="text-cyberAccent animate-pulse"></i>
+            <span id="teacher-timer" class="font-tech font-bold text-3xl text-white w-12 text-center">--</span>
+        </div>
+        <div class="absolute bottom-4 right-4 bg-slate-800/90 backdrop-blur border border-slate-600 rounded-lg px-6 py-3 flex items-center gap-3 z-10 shadow-lg">
+            <i data-lucide="users" class="text-slate-400"></i>
+            <span class="text-slate-300 text-sm font-tech uppercase mr-2">Odpovědělo:</span>
+            <span id="teacher-ans-count" class="font-tech text-2xl font-bold text-white">0/0</span>
+        </div>
+        
+        <div class="w-full h-full flex flex-col items-center justify-center relative mt-12">
+            <!-- STAV 1: Mapa (Odpočet) -->
+            <div id="game-view-map" class="w-full max-w-6xl text-center flex flex-col items-center justify-center">
+                <h2 id="map-title" class="text-4xl font-tech font-bold text-white mb-2 transition-all tracking-wide">Příprava na bitvu...</h2>
+                <div id="map-subtitle" class="w-full flex justify-center items-center min-h-[40px] mb-4 z-20"></div>
+
+                <div class="w-full relative aspect-[16/9] max-h-[65vh] bg-slate-800/60 rounded-3xl border-2 border-slate-700 shadow-[0_0_40px_rgba(6,182,212,0.15)] overflow-hidden p-6 transition-all">
+                    <!-- Realistická vektorová mapa ČR! -->
+                    <svg viewBox="0 0 1000 650" class="w-full h-full drop-shadow-[0_0_20px_rgba(0,0,0,0.8)] z-0 relative">
+                        <g id="cz-map">
+                            <path id="reg-kv" class="cz-region" d="M 64,286 L 86,227 L 118,212 L 140,211 L 180,218 L 198,247 L 222,267 L 223,284 L 209,308 L 182,305 L 146,310 L 110,323 L 95,335 L 75,322 Z"/>
+                            <path id="reg-us" class="cz-region" d="M 140,211 L 160,158 L 221,123 L 261,114 L 327,100 L 372,118 L 382,143 L 369,183 L 328,210 L 298,216 L 273,212 L 235,248 L 222,267 L 198,247 L 180,218 Z"/>
+                            <path id="reg-li" class="cz-region" d="M 327,100 L 358,62 L 398,52 L 441,54 L 468,79 L 458,111 L 446,145 L 420,158 L 391,159 L 369,183 L 382,143 L 372,118 Z"/>
+                            <path id="reg-hk" class="cz-region" d="M 441,54 L 488,52 L 535,63 L 566,97 L 575,133 L 575,152 L 546,177 L 526,220 L 493,222 L 471,228 L 452,223 L 425,212 L 420,158 L 446,145 L 458,111 L 468,79 Z"/>
+                            <path id="reg-pa" class="cz-region" d="M 526,220 L 546,177 L 575,152 L 588,187 L 599,209 L 626,238 L 610,268 L 565,283 L 536,303 L 515,310 L 475,308 L 465,273 L 451,254 L 468,235 L 471,228 L 493,222 Z"/>
+                            <path id="reg-sc" class="cz-region" d="M 273,212 L 298,216 L 328,210 L 369,183 L 391,159 L 420,158 L 425,212 L 452,223 L 471,228 L 468,235 L 451,254 L 465,273 L 475,308 L 450,332 L 413,330 L 396,357 L 363,354 L 325,355 L 293,342 L 253,340 L 224,310 L 209,308 L 223,284 L 222,267 L 235,248 Z"/>
+                            <path id="reg-pr" class="cz-region" d="M 334,258 A 16,16 0 1,1 366,258 A 16,16 0 1,1 334,258 Z"/>
+                            <path id="reg-pl" class="cz-region" d="M 75,322 L 95,335 L 110,323 L 146,310 L 182,305 L 209,308 L 224,310 L 253,340 L 244,383 L 261,424 L 238,443 L 205,420 L 157,390 L 116,400 L 98,390 L 76,346 Z"/>
+                            <path id="reg-jc" class="cz-region" d="M 253,340 L 293,342 L 325,355 L 363,354 L 396,357 L 413,330 L 450,332 L 442,374 L 460,402 L 450,444 L 485,463 L 477,486 L 434,495 L 388,485 L 343,514 L 305,502 L 282,475 L 238,443 L 261,424 L 244,383 Z"/>
+                            <path id="reg-vy" class="cz-region" d="M 413,330 L 450,332 L 475,308 L 515,310 L 536,303 L 565,283 L 575,310 L 566,357 L 577,406 L 536,419 L 516,451 L 485,463 L 450,444 L 460,402 L 442,374 Z"/>
+                            <path id="reg-jm" class="cz-region" d="M 516,451 L 536,419 L 577,406 L 566,357 L 575,310 L 610,268 L 626,238 L 650,260 L 677,262 L 677,322 L 696,356 L 687,393 L 731,438 L 744,484 L 717,495 L 675,487 L 627,515 L 590,500 L 545,508 Z"/>
+                            <path id="reg-ol" class="cz-region" d="M 599,209 L 615,166 L 657,117 L 690,111 L 712,130 L 730,165 L 755,180 L 784,188 L 778,212 L 765,237 L 728,260 L 677,262 L 650,260 L 626,238 Z"/>
+                            <path id="reg-ms" class="cz-region" d="M 784,188 L 814,171 L 860,188 L 888,230 L 910,277 L 883,313 L 848,300 L 802,323 L 766,287 L 765,237 L 778,212 Z"/>
+                            <path id="reg-zl" class="cz-region" d="M 677,262 L 728,260 L 765,237 L 766,287 L 802,323 L 848,300 L 810,344 L 794,395 L 774,420 L 731,438 L 687,393 L 696,356 L 677,322 Z"/>
+                        </g>
+                        <!-- Názvy krajů -->
+                        <text x="145" y="270" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">KV</text>
+                        <text x="250" y="195" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">ÚS</text>
+                        <text x="400" y="115" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">LI</text>
+                        <text x="500" y="150" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">HK</text>
+                        <text x="540" y="240" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">PA</text>
+                        <text x="350" y="295" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">SČ</text>
+                        <text x="180" y="375" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">PL</text>
+                        <text x="340" y="445" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">JČ</text>
+                        <text x="500" y="365" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">VY</text>
+                        <text x="630" y="420" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">JM</text>
+                        <text x="680" y="215" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">OL</text>
+                        <text x="820" y="255" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">MS</text>
+                        <text x="760" y="355" fill="white" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="middle" pointer-events="none">ZL</text>
+                    </svg>
+
+                    <!-- INTRO OVERLAY (Představení kraje na projektoru) -->
+                    <div id="region-intro-overlay" class="absolute inset-0 bg-slate-900/85 backdrop-blur-md flex flex-col items-center justify-center screen-hidden z-20">
+                        <div class="relative w-24 h-24 mb-6">
+                            <div class="absolute inset-0 border-4 border-cyberAccent rounded-full animate-ping opacity-50"></div>
+                            <i data-lucide="crosshair" class="absolute inset-0 m-auto w-16 h-16 text-cyberAccent animate-[spin_4s_linear_infinite]"></i>
+                        </div>
+                        <p class="text-cyberAccent font-tech text-2xl font-bold mb-2 uppercase tracking-[0.3em]">Cíl kybernetického útoku</p>
+                        <h1 id="intro-region-name" class="text-6xl font-tech font-bold text-white mb-8 drop-shadow-[0_0_25px_rgba(6,182,212,0.9)] transform scale-110 transition-transform font-sans">Kraj</h1>
+                        <div class="bg-slate-800/90 border-2 border-slate-600 px-12 py-8 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.9)] text-center">
+                            <p class="text-slate-400 font-bold uppercase text-sm mb-3 tracking-widest font-tech">Klíčová infrastruktura</p>
+                            <p id="intro-region-infra" class="text-4xl text-yellow-400 font-bold drop-shadow-lg font-sans">...</p>
+                        </div>
+                    </div>
+
+                    <div id="map-countdown" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center text-[250px] font-tech font-bold text-cyberAccent glow-text transition-all duration-300 z-30 screen-hidden">5</div>
+                </div>
+            </div>
+
+            <!-- STAV 2: Otázka a odpovědi -->
+            <div id="game-view-question" class="w-full max-w-6xl flex flex-col items-center justify-center screen-hidden">
+                <div class="bg-white text-slate-900 px-10 py-12 rounded-3xl shadow-[0_0_30px_rgba(255,255,255,0.1)] w-full mb-8 text-center border-b-8 border-cyberAccent">
+                    <h2 id="q-text" class="text-4xl md:text-5xl font-bold font-sans leading-tight">Zde bude text otázky?</h2>
+                </div>
+                
+                <div id="answers-grid" class="grid grid-cols-2 gap-6 w-full h-72">
+                    <!-- Dynamicky generováno -->
+                </div>
+                
+                <!-- Pole pro Number typ (zobrazí se učiteli jako info) -->
+                <div id="number-info-box" class="w-full h-72 flex items-center justify-center screen-hidden">
+                    <div class="bg-slate-800 border-2 border-slate-600 px-12 py-8 rounded-3xl text-center shadow-2xl">
+                        <i data-lucide="keyboard" class="w-20 h-20 text-cyberAccent mx-auto mb-6 animate-pulse"></i>
+                        <h3 class="text-3xl font-tech font-bold text-white mb-2">Číselná otázka</h3>
+                        <p class="text-slate-400 text-xl font-sans">Žáci právě na svých zařízeních zadávají číslo...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STAV 3: Výsledky a Graf -->
+            <div id="game-view-results" class="w-full max-w-5xl flex flex-col items-center justify-center screen-hidden w-full">
+                <h2 id="results-q-text" class="text-3xl md:text-4xl font-sans font-bold text-white mb-6 text-center px-4 leading-tight drop-shadow-md">Text otázky</h2>
+                
+                <div class="bg-slate-800 border-2 border-green-500 px-8 py-5 rounded-2xl mb-12 flex items-center justify-center gap-5 max-w-4xl text-center shadow-[0_0_30px_rgba(34,197,94,0.4)]">
+                    <i data-lucide="check-circle" class="w-12 h-12 text-green-400 shrink-0"></i>
+                    <p class="text-3xl font-bold text-white font-sans" id="correct-answer-text">...</p>
+                </div>
+                
+                <!-- Mřížka pro klasické grafy -->
+                <div id="results-bars" class="w-full h-64 flex items-end justify-center gap-6 border-b-2 border-slate-600 pb-0 px-4 relative mt-4">
+                    <div class="flex flex-col items-center justify-end w-1/4 relative group h-full" id="col-1">
+                        <span id="bar-val-1" class="text-white font-bold text-4xl mb-3 transition-all">0</span>
+                        <div id="bar-h-1" class="w-full bg-ansRed rounded-t-xl transition-all duration-1000 shadow-[0_0_15px_rgba(227,52,47,0.4)]" style="height: 0%;"></div>
+                        <div class="w-full h-5 bg-ansRed rounded-b shadow-[0_0_10px_rgba(227,52,47,0.8)]"></div>
+                        <div id="bar-check-1" class="absolute -top-14 text-green-400 hidden animate-bounce"><i data-lucide="check" class="w-14 h-14 drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]"></i></div>
+                        <div class="absolute top-full mt-5 w-full text-center px-2"><span id="bar-lbl-1" class="text-slate-200 font-sans font-bold text-sm md:text-lg line-clamp-3 leading-snug"></span></div>
+                    </div>
+                    <div class="flex flex-col items-center justify-end w-1/4 relative group h-full" id="col-2">
+                        <span id="bar-val-2" class="text-white font-bold text-4xl mb-3 transition-all">0</span>
+                        <div id="bar-h-2" class="w-full bg-ansBlue rounded-t-xl transition-all duration-1000 shadow-[0_0_15px_rgba(52,144,220,0.4)]" style="height: 0%;"></div>
+                        <div class="w-full h-5 bg-ansBlue rounded-b shadow-[0_0_10px_rgba(52,144,220,0.8)]"></div>
+                        <div id="bar-check-2" class="absolute -top-14 text-green-400 hidden animate-bounce"><i data-lucide="check" class="w-14 h-14 drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]"></i></div>
+                        <div class="absolute top-full mt-5 w-full text-center px-2"><span id="bar-lbl-2" class="text-slate-200 font-sans font-bold text-sm md:text-lg line-clamp-3 leading-snug"></span></div>
+                    </div>
+                    <div class="flex flex-col items-center justify-end w-1/4 relative group h-full" id="col-3">
+                        <span id="bar-val-3" class="text-white font-bold text-4xl mb-3 transition-all">0</span>
+                        <div id="bar-h-3" class="w-full bg-ansYellow rounded-t-xl transition-all duration-1000 shadow-[0_0_15px_rgba(246,153,63,0.4)]" style="height: 0%;"></div>
+                        <div class="w-full h-5 bg-ansYellow rounded-b shadow-[0_0_10px_rgba(246,153,63,0.8)]"></div>
+                        <div id="bar-check-3" class="absolute -top-14 text-green-400 hidden animate-bounce"><i data-lucide="check" class="w-14 h-14 drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]"></i></div>
+                        <div class="absolute top-full mt-5 w-full text-center px-2"><span id="bar-lbl-3" class="text-slate-200 font-sans font-bold text-sm md:text-lg line-clamp-3 leading-snug"></span></div>
+                    </div>
+                    <div class="flex flex-col items-center justify-end w-1/4 relative group h-full" id="col-4">
+                        <span id="bar-val-4" class="text-white font-bold text-4xl mb-3 transition-all">0</span>
+                        <div id="bar-h-4" class="w-full bg-ansGreen rounded-t-xl transition-all duration-1000 shadow-[0_0_15px_rgba(56,193,114,0.4)]" style="height: 0%;"></div>
+                        <div class="w-full h-5 bg-ansGreen rounded-b shadow-[0_0_10px_rgba(56,193,114,0.8)]"></div>
+                        <div id="bar-check-4" class="absolute -top-14 text-green-400 hidden animate-bounce"><i data-lucide="check" class="w-14 h-14 drop-shadow-[0_0_10px_rgba(34,197,94,0.8)]"></i></div>
+                        <div class="absolute top-full mt-5 w-full text-center px-2"><span id="bar-lbl-4" class="text-slate-200 font-sans font-bold text-sm md:text-lg line-clamp-3 leading-snug"></span></div>
+                    </div>
+                </div>
+                
+                <!-- Výsledek pro Number typ -->
+                <div id="results-number" class="w-full h-64 flex flex-col items-center justify-center screen-hidden bg-slate-800/80 rounded-2xl border border-slate-600 shadow-xl p-8">
+                    <p class="text-slate-400 font-tech uppercase tracking-widest mb-4">Správných / velmi těsných odpovědí ve třídě</p>
+                    <p id="number-correct-count" class="text-6xl font-bold text-cyberAccent mb-6">0</p>
+                    <p class="text-slate-300 font-sans text-lg">Skvělá práce! Čím blíž byli žáci tomuto číslu, tím více bodů pro tým získali.</p>
+                </div>
+                
+                <button onclick="calculateTerritoryAndShowMap()" class="mt-28 bg-cyberAccent hover:bg-cyan-400 text-slate-900 font-bold py-5 px-14 rounded-2xl text-2xl shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all transform hover:scale-105 hover:-translate-y-1">
+                    Další krok <i data-lucide="arrow-right" class="inline w-8 h-8 ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- OBRAZOVKA 5: STUDENT - HRA -->
+    <main id="screen-student-game" class="flex-1 flex flex-col items-center justify-center p-4 screen-hidden">
+        
+        <div id="stu-state-wait" class="text-center w-full max-w-md bg-slate-800/80 border border-slate-600 rounded-3xl p-10 shadow-2xl relative overflow-hidden">
+            <div class="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyberAccent to-transparent animate-radar"></div>
+            <i data-lucide="crosshair" class="w-24 h-24 text-cyberAccent mx-auto mb-6 opacity-90 animate-[spin_3s_linear_infinite]"></i>
+            <h2 class="text-4xl font-tech font-bold text-white mb-2 tracking-wide drop-shadow-md">Útok se připravuje!</h2>
+            <p class="text-slate-400 text-lg font-sans">Sleduj projektor pro informace o cíli...</p>
+        </div>
+        
+        <div id="stu-state-answer" class="w-full max-w-md screen-hidden flex flex-col items-center">
+            <div id="stu-timer-box" class="w-full flex justify-between items-center mb-6 bg-slate-800/90 px-6 py-4 rounded-2xl border-2 border-slate-600 shadow-lg transition-colors duration-300">
+                <span class="text-slate-300 font-tech text-xl uppercase tracking-wider">Zbývá času</span>
+                <span id="stu-timer" class="text-white font-bold text-4xl drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">20</span>
+            </div>
+            
+            <div id="stu-btn-grid" class="grid grid-cols-2 gap-4 w-full">
+                <button onclick="submitAnswer(1)" id="stu-btn-1" class="answer-btn bg-ansRed h-40 rounded-2xl text-white shadow-[0_8px_0_#b91c1c] active:translate-y-2 active:shadow-none"><i data-lucide="triangle" class="w-16 h-16 fill-white drop-shadow-md"></i></button>
+                <button onclick="submitAnswer(2)" id="stu-btn-2" class="answer-btn bg-ansBlue h-40 rounded-2xl text-white shadow-[0_8px_0_#1d4ed8] active:translate-y-2 active:shadow-none"><i data-lucide="diamond" class="w-16 h-16 fill-white drop-shadow-md"></i></button>
+                <button onclick="submitAnswer(3)" id="stu-btn-3" class="answer-btn bg-ansYellow h-40 rounded-2xl text-white shadow-[0_8px_0_#c2410c] active:translate-y-2 active:shadow-none"><i data-lucide="circle" class="w-16 h-16 fill-white drop-shadow-md"></i></button>
+                <button onclick="submitAnswer(4)" id="stu-btn-4" class="answer-btn bg-ansGreen h-40 rounded-2xl text-white shadow-[0_8px_0_#15803d] active:translate-y-2 active:shadow-none"><i data-lucide="square" class="w-16 h-16 fill-white drop-shadow-md"></i></button>
+            </div>
+            
+            <div id="stu-number-grid" class="w-full screen-hidden flex flex-col gap-4">
+                <div class="bg-slate-800 p-4 rounded-2xl border border-slate-600 text-center shadow-lg">
+                    <p class="text-slate-400 font-tech uppercase tracking-widest text-sm mb-2">Zadej číslo:</p>
+                    <input type="text" id="stu-number-input" readonly class="w-full bg-slate-900 border-2 border-slate-500 rounded-xl px-4 py-3 text-white text-center text-4xl font-bold focus:outline-none" placeholder="0">
+                </div>
+                
+                <!-- Vestavěná číselná klávesnice -->
+                <div class="grid grid-cols-3 gap-3 w-full max-w-[280px] mx-auto mb-2">
+                    <button onclick="typeNum('1')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">1</button>
+                    <button onclick="typeNum('2')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">2</button>
+                    <button onclick="typeNum('3')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">3</button>
+                    <button onclick="typeNum('4')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">4</button>
+                    <button onclick="typeNum('5')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">5</button>
+                    <button onclick="typeNum('6')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">6</button>
+                    <button onclick="typeNum('7')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">7</button>
+                    <button onclick="typeNum('8')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">8</button>
+                    <button onclick="typeNum('9')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">9</button>
+                    <button onclick="typeNum('-')" class="bg-slate-800 text-slate-400 font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">-</button>
+                    <button onclick="typeNum('0')" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-3xl shadow-md active:scale-95 transition">0</button>
+                    <button onclick="typeNum('del')" class="bg-red-500/20 text-red-400 flex items-center justify-center py-3 rounded-xl shadow-md active:scale-95 transition"><i data-lucide="delete" class="w-8 h-8"></i></button>
+                </div>
+                
+                <button onclick="submitNumberAnswer()" class="w-full bg-cyberAccent hover:bg-cyan-400 text-slate-900 font-bold py-4 rounded-2xl text-2xl shadow-[0_6px_0_#0891b2] active:translate-y-2 active:shadow-none transition-all">ODESLAT</button>
+            </div>
+        </div>
+
+        <div id="stu-state-loading" class="text-center screen-hidden w-full max-w-md bg-slate-800/90 border-2 border-slate-600 rounded-3xl p-10 shadow-2xl">
+            <div id="stu-loading-color" class="w-24 h-24 mx-auto mb-6 rounded-3xl shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-center justify-center bg-slate-700">
+                <i id="stu-loading-icon" data-lucide="check" class="w-12 h-12 text-white fill-white"></i>
+                <span id="stu-loading-text" class="text-4xl font-bold text-white hidden"></span>
+            </div>
+            <h2 class="text-3xl font-tech font-bold text-white mb-3">Odpověď uložena!</h2>
+            <p class="text-slate-400 text-lg flex items-center justify-center gap-2">
+                <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-cyberAccent"></i> Čeká se na ostatní...
+            </p>
+        </div>
+
+        <div id="stu-state-result" class="text-center screen-hidden w-full max-w-md bg-slate-800 border-2 border-slate-600 rounded-3xl p-10 shadow-[0_0_30px_rgba(0,0,0,0.5)] mt-4 transition-all">
+            <i id="stu-res-icon" class="w-24 h-24 mx-auto mb-6"></i>
+            <h2 id="stu-res-title" class="text-5xl font-tech font-bold text-white mb-2 tracking-wide">Výsledek</h2>
+            <p id="stu-res-correct-text" class="text-white font-sans font-medium text-lg mb-6 bg-slate-900/50 p-3 rounded-xl border border-slate-700"></p>
+            <div class="bg-slate-900/80 rounded-2xl p-5 inline-block min-w-[200px] border border-slate-700 shadow-inner">
+                <p class="text-slate-400 text-sm uppercase font-tech mb-1 tracking-widest">Tvé body pro tým</p>
+                <p id="stu-res-pts" class="font-bold text-5xl mb-1">+0</p>
+            </div>
+        </div>
+        
+        <!-- Obrazovka KONEC HRY pro žáka -->
+        <div id="stu-state-gameover" class="text-center screen-hidden w-full max-w-md bg-slate-800 border-2 rounded-3xl p-10 shadow-2xl mt-4 relative overflow-hidden transition-all">
+            <i id="stu-go-icon" class="w-28 h-28 mx-auto mb-4 relative z-10"></i>
+            <h2 id="stu-go-title" class="text-5xl font-tech font-bold text-white mb-4 tracking-wider relative z-10">Konec</h2>
+            <p id="stu-go-desc" class="text-slate-300 font-sans text-lg mb-6 relative z-10">Podívej se na projektor na výsledky celé třídy!</p>
+            <div class="bg-slate-900/80 rounded-2xl p-5 inline-block border border-slate-700 relative z-10 w-full">
+                <p class="text-slate-400 text-sm uppercase font-tech mb-1 tracking-widest">Tvůj osobní zisk</p>
+                <p id="stu-go-score" class="font-bold text-4xl text-cyberAccent mb-1">0 bodů</p>
+            </div>
+        </div>
+
+        <!-- STÁLÝ INDIKÁTOR TÝMU PRO ŽÁKA -->
+        <div id="stu-team-indicator" class="fixed bottom-4 right-4 bg-slate-900/90 border-2 rounded-xl px-4 py-2 flex flex-col items-center shadow-[0_0_15px_rgba(0,0,0,0.5)] screen-hidden z-50 transition-all">
+            <span class="text-[10px] text-slate-400 font-tech uppercase tracking-widest mb-0.5">Tvůj tým</span>
+            <div id="stu-team-name" class="font-bold text-lg flex items-center gap-2"></div>
+        </div>
+    </main>
+
+    <!-- ZVUKY -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playBeep(freq, type, duration, vol=0.1) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+        function soundTick() { playBeep(600, 'sine', 0.1, 0.05); }
+        function soundStart() { playBeep(800, 'square', 0.3, 0.1); setTimeout(()=>playBeep(1200, 'square', 0.4, 0.15), 300); }
+        function soundCorrect() { playBeep(523.25, 'sine', 0.1); setTimeout(()=>playBeep(659.25, 'sine', 0.3, 0.15), 100); }
+        function soundWrong() { playBeep(200, 'sawtooth', 0.4, 0.1); }
+        function soundConquerRed() { playBeep(150, 'sawtooth', 0.8, 0.15); setTimeout(()=>playBeep(200, 'square', 0.5, 0.1), 200); }
+        function soundConquerBlue() { playBeep(800, 'sine', 0.4, 0.1); setTimeout(()=>playBeep(1000, 'sine', 0.6, 0.15), 200); }
+    </script>
+
+    <script>
+        lucide.createIcons();
+        const TEACHER_PASSWORD = "tom123";
+        let activeGameCode = "";
+        let peer = null, connection = null, isTeacher = false;
+        let connectedStudents = {}; 
+        let gameQuestions = [];
+        
+        let currentQuestionIndex = -1;
+        let timerInterval = null;
+        let questionTimeLeft = 0;
+        let answersReceived = 0;
+        let teamScores = { red: 0, blue: 0 };
+        let myTeam = null;
+        
+        const regionsData = [
+            { id: 'reg-pr', name: "Praha", infra: "Bankovní systémy a burza" },
+            { id: 'reg-sc', name: "Středočeský kraj", infra: "Průmyslová síť Škoda Auto" },
+            { id: 'reg-jc', name: "Jihočeský kraj", infra: "Řízení JE Temelín" },
+            { id: 'reg-pl', name: "Plzeňský kraj", infra: "Chytré továrny a výroba" },
+            { id: 'reg-kv', name: "Karlovarský kraj", infra: "Energetická síť Vřesová" },
+            { id: 'reg-us', name: "Ústecký kraj", infra: "Uhelné elektrárny a sítě" },
+            { id: 'reg-li', name: "Liberecký kraj", infra: "Optické sítě a ústavy" },
+            { id: 'reg-hk', name: "Královéhradecký kraj", infra: "Zdravotnické systémy nemocnic" },
+            { id: 'reg-pa', name: "Pardubický kraj", infra: "Dopravní a železniční uzly" },
+            { id: 'reg-vy', name: "Kraj Vysočina", infra: "Řízení JE Dukovany" },
+            { id: 'reg-jm', name: "Jihomoravský kraj", infra: "Technologické parky Brno" },
+            { id: 'reg-ol', name: "Olomoucký kraj", infra: "Univerzitní výzkumné servery" },
+            { id: 'reg-zl', name: "Zlínský kraj", infra: "Chemické závody" },
+            { id: 'reg-ms', name: "Moravskoslezský kraj", infra: "Těžký průmysl a hutě" }
+        ];
+        let currentRegionIds = []; 
+
+        const screens = ['screen-join', 'screen-teacher-lobby', 'screen-student-lobby', 'screen-teacher-game', 'screen-student-game'];
+        function showScreen(id) { screens.forEach(s => document.getElementById(s).classList.add('screen-hidden')); document.getElementById(id).classList.remove('screen-hidden'); }
+        
+        document.getElementById('join-code').addEventListener('keypress', e => { if(e.key === 'Enter') verifyGameCode(); });
+        document.getElementById('join-name').addEventListener('keypress', e => { if(e.key === 'Enter') studentJoinGame(); });
+        
+        function typeNum(char) {
+            const inp = document.getElementById('stu-number-input');
+            if (char === 'del') { inp.value = inp.value.slice(0, -1); }
+            else if (char === '-') { inp.value = inp.value.startsWith('-') ? inp.value.substring(1) : '-' + inp.value; }
+            else { inp.value += char; }
+        }
+
+        // --- STUDENT JOIN LOGIKA ---
+        function verifyGameCode() {
+            const codeInput = document.getElementById('join-code').value.trim().toUpperCase();
+            if (codeInput === "") return;
+            const btn = document.getElementById('btn-verify-code');
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i> Ověřuji...';
+            lucide.createIcons();
+            btn.disabled = true; document.getElementById('code-error').classList.add('hidden');
+
+            if(!peer) peer = new Peer();
+            peer.on('open', () => {
+                let tempConn = peer.connect('kyberboj-room-' + codeInput, { reliable: true });
+                tempConn.on('open', () => {
+                    connection = tempConn;
+                    setupStudentConnectionListening();
+                    btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
+                    btn.disabled = false;
+                    document.getElementById('found-code-display').innerText = codeInput;
+                    document.getElementById('phase-code').classList.add('hidden');
+                    document.getElementById('phase-name').classList.remove('hidden');
+                    document.getElementById('join-name').focus();
+                    lucide.createIcons();
+                });
+                setTimeout(() => {
+                    if(!connection || !connection.open) {
+                        btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
+                        btn.disabled = false;
+                        document.getElementById('code-error').classList.remove('hidden');
+                        lucide.createIcons();
+                        if(tempConn) tempConn.close();
+                    }
+                }, 3000);
+            });
+        }
+        
+        function backToCodePhase() {
+            if(connection) { connection.close(); connection = null; }
+            document.getElementById('phase-name').classList.add('hidden');
+            document.getElementById('phase-code').classList.remove('hidden');
+        }
+
+        function studentJoinGame() {
+            const nameInput = document.getElementById('join-name').value.trim();
+            if (nameInput === "") { document.getElementById('name-error').innerText = "Vyplň jméno!"; document.getElementById('name-error').classList.remove('hidden'); return; }
+            document.getElementById('name-error').classList.add('hidden');
+            
+            const btn = document.getElementById('btn-join');
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i> Připojuji...'; lucide.createIcons(); btn.disabled = true;
+
+            if(connection && connection.open) connection.send({ type: 'student_join', name: nameInput });
+            else { alert("Spojení ztraceno."); backToCodePhase(); btn.innerHTML = 'Vstoupit do hry'; btn.disabled = false; }
+        }
+        
+        function setupStudentConnectionListening() {
+            connection.on('data', data => {
+                if(data.type === 'join_error') {
+                    document.getElementById('name-error').innerText = data.message;
+                    document.getElementById('name-error').classList.remove('hidden');
+                    document.getElementById('btn-join').innerHTML = '<span>Vstoupit do hry</span> <i data-lucide="zap" class="w-6 h-6"></i>'; document.getElementById('btn-join').disabled = false;
+                    lucide.createIcons();
+                } else if (data.type === 'join_success') {
+                    document.getElementById('display-student-name').innerText = data.name;
+                    showScreen('screen-student-lobby');
+                } else if (data.type === 'assign_team') {
+                    const box = document.getElementById('student-lobby-box'), spin = document.getElementById('student-spinner'), t = document.getElementById('student-status-title');
+                    myTeam = data.team;
+                    
+                    const indicator = document.getElementById('stu-team-indicator');
+                    const indicatorName = document.getElementById('stu-team-name');
+                    indicator.classList.remove('screen-hidden');
+                    
+                    // Plynulá změna pozadí žáka pro lepší atmosféru
+                    document.body.style.transition = 'background-color 1s ease';
+
+                    if(data.team === 'red') {
+                        document.body.style.backgroundColor = '#450a0a'; // Tmavě červená
+                        indicator.classList.add('border-hackerRed', 'shadow-[0_0_15px_rgba(239,68,68,0.4)]');
+                        indicatorName.innerHTML = '<i data-lucide="skull" class="w-5 h-5 text-hackerRed"></i> <span class="text-hackerRed">Hackeři</span>';
+                        
+                        box.classList.replace('bg-cyberBase', 'bg-hackerRed/20'); box.classList.replace('border-slate-600', 'border-hackerRed');
+                        spin.innerHTML = '<i data-lucide="skull" class="w-20 h-20 text-hackerRed mx-auto animate-[pulse_1s_ease-in-out_infinite]"></i>';
+                        t.innerText = "Tým: Hackeři"; t.classList.replace('text-white', 'text-hackerRed');
+                        t.classList.add('glitch-anim');
+                    } else {
+                        document.body.style.backgroundColor = '#172554'; // Tmavě modrá
+                        indicator.classList.add('border-defenderBlue', 'shadow-[0_0_15px_rgba(59,130,246,0.4)]');
+                        indicatorName.innerHTML = '<i data-lucide="shield-check" class="w-5 h-5 text-defenderBlue"></i> <span class="text-defenderBlue">Ochránci</span>';
+                        
+                        box.classList.replace('bg-cyberBase', 'bg-defenderBlue/20'); box.classList.replace('border-slate-600', 'border-defenderBlue');
+                        spin.innerHTML = '<i data-lucide="shield-check" class="w-20 h-20 text-defenderBlue mx-auto animate-[pulse_1s_ease-in-out_infinite]"></i>';
+                        t.innerText = "Tým: Ochránci"; t.classList.replace('text-white', 'text-defenderBlue');
+                    }
+                    document.getElementById('student-status-text').innerText = "Vítej v týmu. Sleduj plátno!";
+                    lucide.createIcons();
+                } else if (data.type === 'state_countdown') {
+                    showScreen('screen-student-game');
+                    document.getElementById('stu-state-wait').classList.remove('screen-hidden');
+                    document.getElementById('stu-state-answer').classList.add('screen-hidden');
+                    document.getElementById('stu-state-loading').classList.add('screen-hidden');
+                    document.getElementById('stu-state-result').classList.add('screen-hidden');
+                } else if (data.type === 'state_question') {
+                    document.getElementById('stu-state-wait').classList.add('screen-hidden');
+                    document.getElementById('stu-state-loading').classList.add('screen-hidden');
+                    document.getElementById('stu-state-result').classList.add('screen-hidden');
+                    document.getElementById('stu-state-answer').classList.remove('screen-hidden');
+                    
+                    document.getElementById('stu-timer-box').classList.replace('border-red-500', 'border-slate-600');
+                    document.getElementById('stu-timer-box').classList.remove('animate-pulse', 'bg-red-900/50');
+                    
+                    if(data.qType === 'number') {
+                        document.getElementById('stu-btn-grid').classList.add('hidden');
+                        document.getElementById('stu-number-grid').classList.remove('screen-hidden');
+                        document.getElementById('stu-number-input').value = "";
+                    } else {
+                        document.getElementById('stu-btn-grid').classList.remove('hidden');
+                        document.getElementById('stu-number-grid').classList.add('screen-hidden');
+                        for(let i=1; i<=4; i++) {
+                            let b = document.getElementById('stu-btn-'+i);
+                            b.classList.remove('disabled', 'selected');
+                            if(data.qType === 'true/false' && i > 2) b.classList.add('hidden');
+                            else b.classList.remove('hidden');
+                        }
+                    }
+                    document.getElementById('stu-timer').innerText = data.time;
+                } else if (data.type === 'tick') {
+                    document.getElementById('stu-timer').innerText = data.time;
+                    if(data.time <= 5) {
+                        document.getElementById('stu-timer-box').classList.replace('border-slate-600', 'border-red-500');
+                        document.getElementById('stu-timer-box').classList.add('animate-pulse', 'bg-red-900/50');
+                    }
+                } else if (data.type === 'state_results') {
+                    document.getElementById('stu-state-answer').classList.add('screen-hidden');
+                    document.getElementById('stu-state-loading').classList.add('screen-hidden');
+                    document.getElementById('stu-state-result').classList.remove('screen-hidden');
+                    
+                    const ic = document.getElementById('stu-res-icon'), ti = document.getElementById('stu-res-title'), pt = document.getElementById('stu-res-pts'), ctx = document.getElementById('stu-res-correct-text');
+                    document.getElementById('stu-state-result').className = "text-center screen-hidden w-full max-w-md bg-slate-800 border-4 rounded-3xl p-10 shadow-[0_0_40px_rgba(0,0,0,0.8)] mt-4 transition-all scale-105";
+                    
+                    ctx.innerHTML = `Správně bylo:<br><span class="text-cyberAccent font-bold mt-1 block">${data.correctText}</span>`;
+                    
+                    if(data.points > 0) {
+                        document.getElementById('stu-state-result').classList.add('border-correctGreen');
+                        ic.setAttribute('data-lucide', 'check-circle'); 
+                        ic.className = "w-32 h-32 mx-auto mb-6 text-correctGreen drop-shadow-[0_0_25px_rgba(34,197,94,0.9)] animate-[bounce_1s_ease-in-out_infinite]"; 
+                        ti.innerText = data.correct ? "SPRÁVNĚ!" : "VELMI BLÍZKO!"; 
+                        ti.className = "text-5xl font-tech font-bold text-correctGreen mb-6 tracking-widest";
+                        pt.innerText = `+${data.points}`; pt.className = "font-bold text-5xl mb-1 text-correctGreen";
+                        soundCorrect();
+                        if(typeof confetti !== 'undefined') confetti({ particleCount: 120, spread: 100, origin: { y: 0.6 }, colors: ['#22c55e', '#ffffff'] });
+                    } else if (data.answered) {
+                        document.getElementById('stu-state-result').classList.add('border-red-500');
+                        ic.setAttribute('data-lucide', 'x-circle'); 
+                        ic.className = "w-32 h-32 mx-auto mb-6 text-red-500 animate-pulse drop-shadow-[0_0_20px_rgba(239,68,68,0.9)]"; 
+                        ti.innerText = "ŠPATNĚ!"; ti.className = "text-5xl font-tech font-bold text-red-500 mb-6 tracking-widest";
+                        pt.innerText = "+0"; pt.className = "font-bold text-5xl mb-1 text-slate-500";
+                        soundWrong();
+                    } else {
+                        document.getElementById('stu-state-result').classList.add('border-yellow-500');
+                        ic.setAttribute('data-lucide', 'clock'); 
+                        ic.className = "w-32 h-32 mx-auto mb-6 text-yellow-400 animate-pulse drop-shadow-[0_0_20px_rgba(250,204,21,0.9)]";
+                        ti.innerText = "VYPRŠEL ČAS!"; ti.className = "text-4xl font-tech font-bold text-yellow-400 mb-6 tracking-widest";
+                        pt.innerText = "+0"; pt.className = "font-bold text-5xl mb-1 text-slate-500";
+                        soundWrong();
+                    }
+                    lucide.createIcons();
+                } else if (data.type === 'game_over') {
+                    document.getElementById('stu-state-wait').classList.add('screen-hidden');
+                    document.getElementById('stu-state-answer').classList.add('screen-hidden');
+                    document.getElementById('stu-state-loading').classList.add('screen-hidden');
+                    document.getElementById('stu-state-result').classList.add('screen-hidden');
+                    
+                    const go = document.getElementById('stu-state-gameover');
+                    go.classList.remove('screen-hidden');
+                    
+                    const ic = document.getElementById('stu-go-icon');
+                    const ti = document.getElementById('stu-go-title');
+                    document.getElementById('stu-go-score').innerText = data.myScore + " bodů";
+                    
+                    if(data.winnerTeam === 'remiza') {
+                        ic.setAttribute('data-lucide', 'shield-question'); ic.className = "w-28 h-28 mx-auto mb-4 text-slate-400";
+                        ti.innerText = "REMÍZA"; ti.className = "text-5xl font-tech font-bold text-white mb-4";
+                    } else if (data.winnerTeam === myTeam) {
+                        ic.setAttribute('data-lucide', 'trophy'); ic.className = "w-28 h-28 mx-auto mb-4 text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)] animate-bounce";
+                        ti.innerText = "VÍTĚZSTVÍ!"; ti.className = "text-5xl font-tech font-bold text-yellow-400 mb-4 tracking-widest";
+                        go.classList.add('border-yellow-400', 'shadow-[0_0_40px_rgba(250,204,21,0.4)]');
+                        if(typeof confetti !== 'undefined') confetti({ particleCount: 200, spread: 160, origin: { y: 0.5 } });
+                    } else {
+                        ic.setAttribute('data-lucide', 'skull'); ic.className = "w-28 h-28 mx-auto mb-4 text-slate-500 drop-shadow-[0_0_20px_rgba(0,0,0,1)]";
+                        ti.innerText = "PROHRA!"; ti.className = "text-5xl font-tech font-bold text-slate-500 mb-4 tracking-widest";
+                        document.getElementById('stu-go-desc').innerText = "Infrastrukturu se nepodařilo ubránit...";
+                    }
+                    lucide.createIcons();
+                }
+            });
+            connection.on('close', () => { alert("Hra byla ukončena učitelem."); location.reload(); });
+        }
+        
+        function submitAnswer(ansNum) {
+            if(!connection || !connection.open) return;
+            document.getElementById('stu-state-answer').classList.add('screen-hidden');
+            
+            const ldColor = document.getElementById('stu-loading-color');
+            const ldIcon = document.getElementById('stu-loading-icon');
+            ldColor.className = `w-24 h-24 mx-auto mb-6 rounded-3xl shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-center justify-center bg-slate-700`;
+            ldIcon.classList.remove('hidden');
+            ldIcon.setAttribute('data-lucide', 'check');
+            document.getElementById('stu-loading-text').classList.add('hidden');
+            
+            document.getElementById('stu-state-loading').classList.remove('screen-hidden');
+            lucide.createIcons();
+            connection.send({ type: 'submit_answer', answer: ansNum });
+        }
+        
+        function submitNumberAnswer() {
+            if(!connection || !connection.open) return;
+            const val = document.getElementById('stu-number-input').value;
+            if(val === "" || val === "-") return;
+            
+            document.getElementById('stu-state-answer').classList.add('screen-hidden');
+            
+            const ldColor = document.getElementById('stu-loading-color');
+            const ldIcon = document.getElementById('stu-loading-icon');
+            ldColor.className = `w-24 h-24 mx-auto mb-6 rounded-3xl shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-center justify-center bg-slate-700`;
+            ldIcon.classList.remove('hidden');
+            ldIcon.setAttribute('data-lucide', 'check');
+            document.getElementById('stu-loading-text').classList.add('hidden');
+            
+            document.getElementById('stu-state-loading').classList.remove('screen-hidden');
+            lucide.createIcons();
+            connection.send({ type: 'submit_answer_number', answer: parseFloat(val) });
+        }
+
+        // --- UČITEL LOBBY LOGIKA ---
+        function openTeacherLogin() { document.getElementById('teacher-password').value = ""; document.getElementById('login-error').classList.add('hidden'); document.getElementById('modal-teacher-login').classList.remove('screen-hidden'); }
+        function closeTeacherLogin() { document.getElementById('modal-teacher-login').classList.add('screen-hidden'); }
+        function verifyTeacherLogin() {
+            if (document.getElementById('teacher-password').value === TEACHER_PASSWORD) {
+                closeTeacherLogin(); initTeacherLobby();
+            } else document.getElementById('login-error').classList.remove('hidden');
+        }
+        document.getElementById('teacher-password').addEventListener('keypress', e => { if (e.key === 'Enter') verifyTeacherLogin(); });
+
+        function initTeacherLobby() {
+            showScreen('screen-teacher-lobby');
+            isTeacher = true; document.getElementById('display-game-code').innerHTML = '<i class="lucide-loader-2 w-10 h-10 animate-spin inline"></i>';
+            lucide.createIcons();
+            connectTeacherToNetwork();
+        }
+        function connectTeacherToNetwork() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; activeGameCode = '';
+            for(let i=0;i<4;i++) activeGameCode += chars.charAt(Math.floor(Math.random()*chars.length));
+            peer = new Peer('kyberboj-room-' + activeGameCode);
+            peer.on('open', id => {
+                document.getElementById('display-game-code').innerText = activeGameCode;
+                document.getElementById('fullscreen-code-text').innerText = activeGameCode;
+            });
+            peer.on('error', err => { if(err.type === 'unavailable-id') connectTeacherToNetwork(); else alert("Chyba: " + err.message); });
+            peer.on('connection', conn => {
+                conn.on('open', () => {
+                    conn.on('data', data => {
+                        if(data.type === 'student_join') {
+                            if(Object.values(connectedStudents).some(s => s.name.toLowerCase() === data.name.toLowerCase())) {
+                                conn.send({ type: 'join_error', message: 'Jméno je již zabrané. Zvol si prosím jiné!'});
+                            } else {
+                                connectedStudents[conn.peer] = { connection: conn, name: data.name, team: null, totalScore: 0 };
+                                conn.send({ type: 'join_success', name: data.name });
+                                updateTeacherUI();
+                            }
+                        } else if (data.type === 'submit_answer') {
+                            handleStudentAnswer(conn.peer, data.answer, false);
+                        } else if (data.type === 'submit_answer_number') {
+                            handleStudentAnswer(conn.peer, data.answer, true);
+                        }
+                    });
+                    conn.on('close', () => { delete connectedStudents[conn.peer]; updateTeacherUI(); });
+                });
+            });
+        }
+        
+        function updateTeacherUI() {
+            const keys = Object.keys(connectedStudents);
+            document.getElementById('player-count').innerText = keys.length;
+            const grid = document.getElementById('players-grid');
+            if(keys.length === 0) grid.innerHTML = '<div class="col-span-full py-12 text-center border-2 border-dashed border-slate-700 rounded-xl bg-slate-800/30 text-slate-500"><i data-lucide="laptop" class="w-10 h-10 mx-auto mb-3 opacity-50"></i>Studenti se mohou připojit.</div>';
+            else {
+                grid.innerHTML = '';
+                keys.forEach(id => {
+                    grid.innerHTML += `<div class="bg-slate-800 border border-slate-600 rounded-lg p-3 flex items-center gap-3 animate-[pulse_0.5s_ease-out_1] shadow-md"><div class="bg-slate-700 p-2 rounded-full text-cyberAccent"><i data-lucide="user" class="w-5 h-5"></i></div><span class="text-white font-medium text-lg truncate">${connectedStudents[id].name}</span></div>`;
+                });
+            }
+            lucide.createIcons();
+            const btn = document.getElementById('btn-start-game'), warn = document.getElementById('lobby-warning');
+            if (gameQuestions.length > 0 && keys.length > 0) {
+                btn.disabled = false; btn.className = "bg-cyberAccent hover:bg-cyan-400 text-slate-900 font-bold py-4 px-10 rounded-xl uppercase tracking-widest font-tech flex items-center gap-2 transition text-lg shadow-[0_0_25px_rgba(6,182,212,0.6)] transform hover:scale-105";
+                warn.innerText = "Vše připraveno ke startu."; warn.className = "text-sm text-green-400 font-bold";
+            } else {
+                btn.disabled = true; btn.className = "bg-cyberAccent/30 text-slate-900/50 cursor-not-allowed font-bold py-4 px-10 rounded-xl uppercase tracking-widest font-tech flex items-center gap-2 transition text-lg";
+                warn.innerText = gameQuestions.length === 0 ? "Před startem načtěte CSV." : "Čeká se na hráče."; warn.className = "text-sm text-slate-500 font-medium";
+            }
+        }
+        function toggleFullscreenCode() { document.getElementById('overlay-fullscreen-code').classList.toggle('screen-hidden'); }
+        
+        function loadServerCSV() {
+            const fileName = document.getElementById('server-csv-select').value;
+            if (!fileName) { alert("Vyberte sadu ze seznamu."); return; }
+            
+            document.getElementById('csv-status').innerHTML = `<span class="text-yellow-400 font-bold">Načítám...</span>`;
+            
+            fetch(fileName)
+            .then(response => response.arrayBuffer())
+            .then(buffer => {
+                let decoder = new TextDecoder('utf-8');
+                let text = decoder.decode(buffer);
+                if (text.includes('')) {
+                    decoder = new TextDecoder('windows-1250');
+                    text = decoder.decode(buffer);
+                }
+                
+                Papa.parse(text, {
+                    header: true, skipEmptyLines: true,
+                    complete: function(res) {
+                        if(res.data.length>0 && res.data[0].question) { 
+                            gameQuestions = res.data; 
+                            document.getElementById('csv-status').innerHTML = `<span class="text-green-400 font-bold">Načteno: ${gameQuestions.length} otázek</span>`; 
+                            updateTeacherUI(); 
+                        } else {
+                            document.getElementById('csv-status').innerHTML = `<span class="text-red-400 font-bold">Chyba formátu CSV!</span>`;
+                        }
+                    },
+                    error: function() { document.getElementById('csv-status').innerHTML = `<span class="text-red-400 font-bold">Chyba parsování!</span>`; }
+                });
+            })
+            .catch(err => {
+                document.getElementById('csv-status').innerHTML = `<span class="text-red-400 font-bold">Soubor nenalezen!</span>`;
+            });
+        }
+
+        // --- HERNÍ CYKLUS (UČITEL) ---
+        function broadcast(data) { Object.values(connectedStudents).forEach(s => { if(s.connection.open) s.connection.send(data); }); }
+        
+        function teacherStartGame() {
+            const keys = Object.keys(connectedStudents);
+            for (let i = keys.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+            keys.forEach((id, idx) => {
+                const t = idx % 2 === 0 ? 'red' : 'blue';
+                connectedStudents[id].team = t;
+                connectedStudents[id].connection.send({ type: 'assign_team', team: t });
+            });
+            
+            showScreen('screen-teacher-game');
+            document.getElementById('ui-q-total').innerText = gameQuestions.length;
+            
+            currentRegionIds = [...regionsData];
+            for (let i = currentRegionIds.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [currentRegionIds[i], currentRegionIds[j]] = [currentRegionIds[j], currentRegionIds[i]]; }
+            
+            startCountdownSequence();
+        }
+
+        function startCountdownSequence() {
+            currentQuestionIndex++;
+            if(currentQuestionIndex >= gameQuestions.length || currentQuestionIndex >= currentRegionIds.length) {
+                endGame(); return;
+            }
+            
+            const currentReg = currentRegionIds[currentQuestionIndex];
+            
+            document.getElementById('ui-q-num').innerText = currentQuestionIndex + 1;
+            document.getElementById('game-view-map').classList.remove('screen-hidden');
+            document.getElementById('game-view-question').classList.add('screen-hidden');
+            document.getElementById('game-view-results').classList.add('screen-hidden');
+            
+            document.getElementById('map-title').innerText = "Pozor, vybíráme cíl útoku!";
+            document.getElementById('map-subtitle').innerHTML = ``;
+            
+            const allRegs = document.querySelectorAll('.cz-region');
+            allRegs.forEach(r => { 
+                if(!r.classList.contains('red') && !r.classList.contains('blue')) { 
+                    r.style.stroke = "#0f172a"; r.style.strokeWidth = "3.5"; r.classList.remove('animate-[pulse_1s_ease-in-out_infinite]'); 
+                }
+            });
+            
+            const targetEl = document.getElementById(currentReg.id);
+            targetEl.style.stroke = "#06b6d4"; targetEl.style.strokeWidth = "8";
+            targetEl.classList.add('animate-[pulse_1s_ease-in-out_infinite]');
+            
+            document.getElementById('intro-region-name').innerText = currentReg.name;
+            document.getElementById('intro-region-infra').innerText = currentReg.infra;
+            document.getElementById('region-intro-overlay').classList.remove('screen-hidden');
+            document.getElementById('map-countdown').classList.add('screen-hidden');
+            
+            broadcast({ type: 'state_countdown' });
+            soundStart(); 
+            
+            setTimeout(() => {
+                document.getElementById('region-intro-overlay').classList.add('screen-hidden');
+                let count = 5;
+                const cntEl = document.getElementById('map-countdown');
+                cntEl.classList.remove('screen-hidden');
+                cntEl.innerText = count;
+                soundTick();
+                
+                const ival = setInterval(() => {
+                    count--;
+                    if(count > 0) { cntEl.innerText = count; soundTick(); }
+                    else {
+                        clearInterval(ival);
+                        cntEl.classList.add('screen-hidden');
+                        soundStart(); 
+                        showQuestion();
+                    }
+                }, 1000);
+            }, 5000); 
+        }
+
+        function showQuestion() {
+            document.getElementById('game-view-map').classList.add('screen-hidden');
+            document.getElementById('game-view-question').classList.remove('screen-hidden');
+            
+            const q = gameQuestions[currentQuestionIndex];
+            document.getElementById('q-text').innerText = q.question;
+            
+            if(q.type === 'number') {
+                document.getElementById('answers-grid').classList.add('screen-hidden');
+                document.getElementById('number-info-box').classList.remove('screen-hidden');
+            } else {
+                document.getElementById('number-info-box').classList.add('screen-hidden');
+                const grid = document.getElementById('answers-grid');
+                grid.classList.remove('screen-hidden');
+                grid.innerHTML = '';
+                
+                const colors = ['bg-ansRed', 'bg-ansBlue', 'bg-ansYellow', 'bg-ansGreen'];
+                const icons = ['triangle', 'diamond', 'circle', 'square'];
+                const shadowColors = ['#b91c1c', '#1d4ed8', '#c2410c', '#15803d'];
+                
+                let maxAns = q.type === 'true/false' ? 2 : 4;
+                for(let i=1; i<=maxAns; i++) {
+                    grid.innerHTML += `
+                        <div class="${colors[i-1]} rounded-3xl flex items-center p-8 shadow-[0_8px_0_${shadowColors[i-1]}] relative overflow-hidden transition-transform transform hover:scale-[1.02]">
+                            <div class="bg-black/20 w-24 h-24 rounded-2xl flex items-center justify-center mr-8 shrink-0"><i data-lucide="${icons[i-1]}" class="w-12 h-12 text-white fill-white"></i></div>
+                            <span class="text-white font-bold text-3xl md:text-4xl drop-shadow-md font-sans">${q['answer_'+i]}</span>
+                        </div>
+                    `;
+                }
+                lucide.createIcons();
+            }
+            
+            answersReceived = 0;
+            Object.values(connectedStudents).forEach(s => { s.currentAnswer = null; s.currentScore = 0; });
+            document.getElementById('teacher-ans-count').innerText = `0/${Object.keys(connectedStudents).length}`;
+            
+            questionTimeLeft = parseInt(q.time) || 20;
+            document.getElementById('teacher-timer').innerText = questionTimeLeft;
+            document.getElementById('teacher-timer').classList.remove('text-red-500', 'animate-ping');
+            
+            broadcast({ type: 'state_question', time: questionTimeLeft, qType: q.type });
+            
+            timerInterval = setInterval(() => {
+                questionTimeLeft--;
+                document.getElementById('teacher-timer').innerText = questionTimeLeft;
+                if(questionTimeLeft <= 5) document.getElementById('teacher-timer').classList.add('text-red-500', 'animate-ping');
+                
+                broadcast({ type: 'tick', time: questionTimeLeft });
+                
+                if(questionTimeLeft <= 0 || answersReceived >= Object.keys(connectedStudents).length) {
+                    clearInterval(timerInterval);
+                    showResults();
+                }
+            }, 1000);
+        }
+
+        function handleStudentAnswer(peerId, answerVal, isNumber) {
+            const student = connectedStudents[peerId];
+            if(student && student.currentAnswer === null && questionTimeLeft > 0) {
+                student.currentAnswer = answerVal;
+                const q = gameQuestions[currentQuestionIndex];
+                const maxT = parseInt(q.time) || 20;
+                const timeRatio = questionTimeLeft / maxT;
+                
+                if(isNumber && q.type === 'number') {
+                    const diff = Math.abs(answerVal - parseFloat(q.correct_answer));
+                    if(diff < 10) {
+                        const accuracy = (10 - diff) / 10;
+                        student.currentScore = Math.floor((500 + 500 * timeRatio) * accuracy);
+                    } else {
+                        student.currentScore = 0;
+                    }
+                } else {
+                    if(answerVal == q.correct_answer) {
+                        student.currentScore = Math.floor(500 + (500 * timeRatio));
+                    }
+                }
+                student.totalScore += student.currentScore;
+                
+                answersReceived++;
+                document.getElementById('teacher-ans-count').innerText = `${answersReceived}/${Object.keys(connectedStudents).length}`;
+                
+                if(answersReceived >= Object.keys(connectedStudents).length) {
+                    clearInterval(timerInterval);
+                    setTimeout(() => showResults(), 1000); 
+                }
+            }
+        }
+
+        function showResults() {
+            document.getElementById('game-view-question').classList.add('screen-hidden');
+            document.getElementById('game-view-results').classList.remove('screen-hidden');
+            
+            const q = gameQuestions[currentQuestionIndex];
+            document.getElementById('results-q-text').innerText = q.question;
+            document.getElementById('correct-answer-text').innerText = q.type === 'number' ? q.correct_answer : q['answer_' + q.correct_answer];
+            
+            if(q.type === 'number') {
+                document.getElementById('results-bars').classList.add('screen-hidden');
+                document.getElementById('results-number').classList.remove('screen-hidden');
+                
+                let successCount = 0;
+                Object.values(connectedStudents).forEach(s => {
+                    if(s.currentAnswer !== null && s.currentScore > 0) successCount++;
+                    if(s.connection.open) {
+                        s.connection.send({ 
+                            type: 'state_results', 
+                            answered: s.currentAnswer !== null,
+                            correct: s.currentScore > 0,
+                            points: s.currentScore,
+                            correctText: q.correct_answer
+                        });
+                    }
+                });
+                document.getElementById('number-correct-count').innerText = successCount;
+                
+            } else {
+                document.getElementById('results-number').classList.add('screen-hidden');
+                document.getElementById('results-bars').classList.remove('screen-hidden');
+                
+                let counts = [0,0,0,0,0]; 
+                Object.values(connectedStudents).forEach(s => {
+                    if(s.currentAnswer) counts[s.currentAnswer]++;
+                    if(s.connection.open) {
+                        s.connection.send({ 
+                            type: 'state_results', 
+                            answered: s.currentAnswer !== null,
+                            correct: s.currentAnswer == q.correct_answer,
+                            points: s.currentScore,
+                            correctText: q['answer_' + q.correct_answer]
+                        });
+                    }
+                });
+                
+                const maxAns = q.type === 'true/false' ? 2 : 4;
+                const maxCount = Math.max(...counts.slice(1, 5)) || 1;
+                
+                for(let i=1; i<=4; i++) {
+                    document.getElementById('bar-check-'+i).classList.add('hidden');
+                    if(i > maxAns) {
+                        document.getElementById('col-'+i).classList.add('hidden');
+                    } else {
+                        document.getElementById('col-'+i).classList.remove('hidden');
+                        document.getElementById('bar-val-'+i).innerText = counts[i];
+                        document.getElementById('bar-lbl-'+i).innerText = q['answer_'+i];
+                        
+                        const pct = Math.max((counts[i] / maxCount) * 100, 5); 
+                        setTimeout(() => { document.getElementById('bar-h-'+i).style.height = pct + '%'; }, 100);
+                        
+                        if(i == q.correct_answer) {
+                            document.getElementById('bar-check-'+i).classList.remove('hidden');
+                            document.getElementById('bar-val-'+i).className = 'text-green-400 font-bold text-5xl mb-3 transition-all drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]';
+                        } else {
+                            document.getElementById('bar-val-'+i).className = 'text-white font-bold text-4xl mb-3 transition-all opacity-50';
+                        }
+                    }
+                }
+            }
+            lucide.createIcons();
+        }
+
+        function calculateTerritoryAndShowMap() {
+            let roundScoreRed = 0, roundScoreBlue = 0;
+            Object.values(connectedStudents).forEach(s => {
+                if(s.team === 'red') roundScoreRed += s.currentScore;
+                if(s.team === 'blue') roundScoreBlue += s.currentScore;
+            });
+            
+            teamScores.red += roundScoreRed;
+            teamScores.blue += roundScoreBlue;
+            document.getElementById('ui-score-red').innerText = teamScores.red;
+            document.getElementById('ui-score-blue').innerText = teamScores.blue;
+            
+            document.getElementById('game-view-results').classList.add('screen-hidden');
+            document.getElementById('game-view-map').classList.remove('screen-hidden');
+            document.getElementById('map-title').innerText = "Vyhodnocení bitvy...";
+            document.getElementById('map-subtitle').innerHTML = `<span class="text-hackerRed font-bold text-3xl">+${roundScoreRed}</span> <span class="mx-4 text-white text-2xl">vs</span> <span class="text-defenderBlue font-bold text-3xl">+${roundScoreBlue}</span>`;
+            
+            const currentReg = currentRegionIds[currentQuestionIndex];
+            const regEl = document.getElementById(currentReg.id);
+            regEl.classList.remove('animate-[pulse_1s_ease-in-out_infinite]');
+            regEl.style.stroke = "#0f172a";
+            regEl.style.strokeWidth = "2.5";
+            
+            if(roundScoreRed > roundScoreBlue) {
+                regEl.classList.add('red');
+                soundConquerRed();
+            } else if (roundScoreBlue > roundScoreRed) {
+                regEl.classList.add('blue');
+                soundConquerBlue();
+            }
+            
+            setTimeout(() => { startCountdownSequence(); }, 5000);
+        }
+        
+        function endGame() {
+            document.getElementById('game-view-map').classList.remove('screen-hidden');
+            document.getElementById('game-view-question').classList.add('screen-hidden');
+            document.getElementById('game-view-results').classList.add('screen-hidden');
+            
+            let winner = "Remíza";
+            let winnerCode = "remiza";
+            let color = "text-white";
+            let confettiColors = ['#ffffff'];
+            
+            if(teamScores.red > teamScores.blue) { 
+                winner = "ZVÍTĚZILI HACKEŘI!"; winnerCode = 'red'; color = "text-hackerRed drop-shadow-[0_0_30px_rgba(239,68,68,0.9)]"; soundConquerRed(); confettiColors = ['#ef4444', '#7f1d1d', '#000000'];
+            }
+            else if (teamScores.blue > teamScores.red) { 
+                winner = "ZVÍTĚZILI OCHRÁNCI!"; winnerCode = 'blue'; color = "text-defenderBlue drop-shadow-[0_0_30px_rgba(59,130,246,0.9)]"; soundConquerBlue(); confettiColors = ['#3b82f6', '#1e3a8a', '#ffffff'];
+            }
+            
+            if(typeof confetti !== 'undefined') {
+                const duration = 7000; const animationEnd = Date.now() + duration;
+                const interval = setInterval(function() {
+                    if(Date.now() > animationEnd) return clearInterval(interval);
+                    confetti({ particleCount: 60, startVelocity: 40, spread: 360, origin: {x: Math.random(), y: Math.random() - 0.2}, colors: confettiColors });
+                }, 250);
+            }
+            
+            const sortedPlayers = Object.values(connectedStudents).sort((a, b) => b.totalScore - a.totalScore);
+            let topHtml = '<div class="mt-12 flex justify-center items-end gap-6 h-72">';
+            const heights = ['h-64', 'h-52', 'h-40']; 
+            
+            sortedPlayers.slice(0, 3).forEach((p, idx) => {
+                let badge = idx === 0 ? '🏆 1. Místo' : (idx === 1 ? '🥈 2. Místo' : '🥉 3. Místo');
+                let tcolor = p.team === 'red' ? 'text-hackerRed' : 'text-defenderBlue';
+                let scale = idx === 0 ? 'scale-110 z-10 border-cyberAccent shadow-[0_0_40px_rgba(6,182,212,0.4)]' : 'scale-100 opacity-90 border-slate-600';
+                
+                topHtml += `<div class="bg-slate-800/90 ${heights[idx]} p-6 border-2 ${scale} rounded-t-3xl shadow-2xl flex flex-col justify-between transform transition-transform">
+                                <p class="text-sm text-slate-400 font-tech uppercase text-center tracking-widest">${badge}</p>
+                                <div class="text-center">
+                                    <p class="text-3xl font-bold ${tcolor} drop-shadow-md font-sans">${p.name}</p>
+                                    <p class="text-cyberAccent font-bold text-3xl mt-3">${p.totalScore} <span class="text-sm text-slate-500">bodů</span></p>
+                                </div>
+                            </div>`;
+            });
+            topHtml += '</div>';
+
+            document.getElementById('map-title').innerHTML = `KONEC HRY<br><span class="${color} text-7xl mt-4 block">${winner}</span>`;
+            document.getElementById('map-subtitle').innerHTML = topHtml;
+            document.getElementById('map-subtitle').classList.remove('min-h-[40px]'); 
+            
+            Object.values(connectedStudents).forEach(s => { 
+                if(s.connection.open) {
+                    s.connection.send({ 
+                        type: 'game_over', 
+                        winnerTeam: winnerCode,
+                        myScore: s.totalScore
+                    });
+                }
+            });
+        }
+    </script>
+</body>
+</html>
