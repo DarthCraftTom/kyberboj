@@ -531,7 +531,14 @@
             lucide.createIcons();
             btn.disabled = true; document.getElementById('code-error').classList.add('hidden');
 
-            if(!peer) peer = new Peer();
+            if(!peer) peer = new Peer({
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             peer.on('open', () => {
                 let tempConn = peer.connect('kyberboj-room-' + codeInput, { reliable: true });
                 tempConn.on('open', () => {
@@ -773,7 +780,14 @@
         function connectTeacherToNetwork() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; activeGameCode = '';
             for(let i=0;i<4;i++) activeGameCode += chars.charAt(Math.floor(Math.random()*chars.length));
-            peer = new Peer('kyberboj-room-' + activeGameCode);
+            peer = new Peer('kyberboj-room-' + activeGameCode, {
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             peer.on('open', id => {
                 document.getElementById('display-game-code').innerText = activeGameCode;
                 document.getElementById('fullscreen-code-text').innerText = activeGameCode;
