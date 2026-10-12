@@ -832,9 +832,15 @@
             fetch(fileName)
             .then(response => response.arrayBuffer())
             .then(buffer => {
-                let decoder = new TextDecoder('utf-8');
-                let text = decoder.decode(buffer);
-                if (text.includes('')) {
+                // Neprůstřelné zjištění kódování češtiny
+                let decoder = new TextDecoder('utf-8', { fatal: true });
+                let text;
+                try {
+                    // Zkusí UTF-8. Pokud se to rozbije (jsou tam nesmysly jako Ă), hodí to chybu.
+                    text = decoder.decode(buffer);
+                    if (text.includes('Ă') || text.includes('Ĺ')) throw new Error('Bad encoding');
+                } catch (e) {
+                    // Pokud je UTF-8 špatně, načte to jako Windows-1250 (Český Excel)
                     decoder = new TextDecoder('windows-1250');
                     text = decoder.decode(buffer);
                 }
