@@ -535,17 +535,39 @@
                 config: {
                     'iceServers': [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' },
                         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
                     ]
                 }
             };
 
-            const connectToHost = () => {
-                let tempConn = peer.connect('kyberboj-room-' + codeInput, { reliable: true });
-                tempConn.on('open', () => {
-                    connection = tempConn;
+            // Zničit starou instanci peera při každém pokusu pro zajištění čistého štítu
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+
+            peer = new Peer(peerConfig);
+
+            // Timeout spadne jen tehdy, pokud je extrémní problém s firewallem
+            let connectionTimeout = setTimeout(() => {
+                if (!connection || !connection.open) {
+                    btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
+                    btn.disabled = false;
+                    document.getElementById('code-error').innerText = "Nelze se spojit (zkontroluj síť nebo firewall).";
+                    document.getElementById('code-error').classList.remove('hidden');
+                    lucide.createIcons();
+                    if (connection) connection.close();
+                }
+            }, 12000);
+
+            peer.on('open', () => {
+                connection = peer.connect('kyberboj-room-' + codeInput, { reliable: true });
+                
+                connection.on('open', () => {
+                    clearTimeout(connectionTimeout); // Spojeno včas
                     setupStudentConnectionListening();
                     btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
                     btn.disabled = false;
@@ -555,25 +577,19 @@
                     document.getElementById('join-name').focus();
                     lucide.createIcons();
                 });
-                
-                // Mobilní sítě vyžadují více času k vyjednání P2P spojení
-                setTimeout(() => {
-                    if(!connection || !connection.open) {
-                        btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
-                        btn.disabled = false;
-                        document.getElementById('code-error').classList.remove('hidden');
-                        lucide.createIcons();
-                        if(tempConn) tempConn.close();
-                    }
-                }, 10000); 
-            };
+            });
 
-            if(!peer) {
-                peer = new Peer(peerConfig);
-                peer.on('open', connectToHost);
-            } else {
-                connectToHost();
-            }
+            // Přímá detekce, pokud zadaný kód (učitel) neexistuje - nezdržujeme timeoutem
+            peer.on('error', (err) => {
+                if (err.type === 'peer-unavailable') {
+                    clearTimeout(connectionTimeout);
+                    btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
+                    btn.disabled = false;
+                    document.getElementById('code-error').innerText = "Hra s tímto kódem neexistuje!";
+                    document.getElementById('code-error').classList.remove('hidden');
+                    lucide.createIcons();
+                }
+            });
         }
         
         function backToCodePhase() {
@@ -792,13 +808,18 @@
         function connectTeacherToNetwork() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; activeGameCode = '';
             for(let i=0;i<4;i++) activeGameCode += chars.charAt(Math.floor(Math.random()*chars.length));
+            
+            // Vymazání předchozích instancí při restartu / chybě
+            if (peer) { peer.destroy(); }
+            
             peer = new Peer('kyberboj-room-' + activeGameCode, {
                 config: {
                     'iceServers': [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' },
                         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
                     ]
                 }
             });
@@ -806,6 +827,14 @@
                 document.getElementById('display-game-code').innerText = activeGameCode;
                 document.getElementById('fullscreen-code-text').innerText = activeGameCode;
             });
+            
+            // Pojistka proti tomu, aby spojení při nečinnosti "usnulo" na pozadí
+            peer.on('disconnected', () => {
+                if (peer && !peer.destroyed) {
+                    peer.reconnect();
+                }
+            });
+            
             peer.on('error', err => { if(err.type === 'unavailable-id') connectTeacherToNetwork(); else alert("Chyba: " + err.message); });
             peer.on('connection', conn => {
                 conn.on('open', () => {
