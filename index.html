@@ -975,10 +975,11 @@
                 
                 let maxAns = q.type === 'true/false' ? 2 : 4;
                 for(let i=1; i<=maxAns; i++) {
+                    // Změněno: Padding (p-8 -> px-6 py-4), aby bylo víc místa pro dlouhé texty. Text je flex-1, shrinkuje a zalamuje se.
                     grid.innerHTML += `
-                        <div class="${colors[i-1]} rounded-3xl flex items-center p-8 shadow-[0_8px_0_${shadowColors[i-1]}] relative overflow-hidden transition-transform transform hover:scale-[1.02]">
-                            <div class="bg-black/20 w-24 h-24 rounded-2xl flex items-center justify-center mr-8 shrink-0"><i data-lucide="${icons[i-1]}" class="w-12 h-12 text-white fill-white"></i></div>
-                            <span class="text-white font-bold text-3xl md:text-4xl drop-shadow-md font-sans">${q['answer_'+i]}</span>
+                        <div class="${colors[i-1]} rounded-3xl flex items-center px-6 py-4 shadow-[0_8px_0_${shadowColors[i-1]}] relative overflow-hidden transition-transform transform hover:scale-[1.02]">
+                            <div class="bg-black/20 w-20 h-20 rounded-2xl flex items-center justify-center mr-6 shrink-0"><i data-lucide="${icons[i-1]}" class="w-10 h-10 text-white fill-white"></i></div>
+                            <span class="text-white font-bold text-2xl md:text-3xl drop-shadow-md font-sans flex-1 leading-snug tracking-wide line-clamp-3">${q['answer_'+i]}</span>
                         </div>
                     `;
                 }
