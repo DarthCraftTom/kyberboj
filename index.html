@@ -839,10 +839,22 @@
                     text = decoder.decode(buffer);
                 }
                 
+                // Automatické odstranění nechtěných vnějších uvozovek z celých řádků
+                let lines = text.trim().split(/\r?\n/);
+                if (lines[0] && lines[0].startsWith('"') && lines[0].endsWith('"') && lines[0].includes('id,type')) {
+                    text = lines.map(l => {
+                        let s = l.trim();
+                        if (s.startsWith('"') && s.endsWith('"')) {
+                            s = s.slice(1, -1).replace(/""/g, '"');
+                        }
+                        return s;
+                    }).join('\n');
+                }
+                
                 Papa.parse(text, {
                     header: true, skipEmptyLines: true,
                     complete: function(res) {
-                        if(res.data.length>0 && res.data[0].question) { 
+                        if(res.data.length > 0 && res.data[0].question) { 
                             gameQuestions = res.data; 
                             document.getElementById('csv-status').innerHTML = `<span class="text-green-400 font-bold">Načteno: ${gameQuestions.length} otázek</span>`; 
                             updateTeacherUI(); 
