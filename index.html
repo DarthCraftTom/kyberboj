@@ -481,8 +481,9 @@
         const TEACHER_PASSWORD = "tom123";
         let activeGameCode = "";
         let mqttClient = null, connection = null, isTeacher = false;
-        let myStudentId = Math.random().toString(36).substr(2, 9); // Unikátní ID pro centrální server
-        const MQTT_BROKER = 'wss://broker.hivemq.com:8443/mqtt'; // Veřejný Kahoot-like server
+        let myStudentId = Math.random().toString(36).substr(2, 9); 
+        // Spolehlivější veřejný server (EMQX)
+        const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt'; 
         let connectedStudents = {}; 
         let gameQuestions = [];
         
@@ -534,7 +535,10 @@
             btn.disabled = true; document.getElementById('code-error').classList.add('hidden');
 
             if (mqttClient) mqttClient.end(true);
-            mqttClient = mqtt.connect(MQTT_BROKER);
+            
+            // Unikátní ID žáka
+            const clientId = 'student_' + myStudentId;
+            mqttClient = mqtt.connect(MQTT_BROKER, { clientId: clientId });
             
             let connTimeout = setTimeout(() => {
                 if (!connection || !connection.open) {
@@ -796,20 +800,24 @@
 
         function initTeacherLobby() {
             showScreen('screen-teacher-lobby');
-            isTeacher = true; document.getElementById('display-game-code').innerHTML = '<i class="lucide-loader-2 w-10 h-10 animate-spin inline"></i>';
-            lucide.createIcons();
+            isTeacher = true;
             connectTeacherToNetwork();
         }
         function connectTeacherToNetwork() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; activeGameCode = '';
             for(let i=0;i<4;i++) activeGameCode += chars.charAt(Math.floor(Math.random()*chars.length));
             
+            // Okamžité zobrazení kódu bez čekání na připojení k serveru
+            document.getElementById('display-game-code').innerText = activeGameCode;
+            document.getElementById('fullscreen-code-text').innerText = activeGameCode;
+            
             if(mqttClient) mqttClient.end(true);
-            mqttClient = mqtt.connect(MQTT_BROKER);
+            
+            // Unikátní ID pro stabilitu spojení
+            const clientId = 'teacher_' + Math.random().toString(16).substr(2, 8);
+            mqttClient = mqtt.connect(MQTT_BROKER, { clientId: clientId });
 
             mqttClient.on('connect', () => {
-                document.getElementById('display-game-code').innerText = activeGameCode;
-                document.getElementById('fullscreen-code-text').innerText = activeGameCode;
                 // Učitel naslouchá žákům
                 mqttClient.subscribe(`kyberboj/${activeGameCode}/teacher`);
             });
