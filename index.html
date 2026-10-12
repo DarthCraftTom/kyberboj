@@ -531,15 +531,18 @@
             lucide.createIcons();
             btn.disabled = true; document.getElementById('code-error').classList.add('hidden');
 
-            if(!peer) peer = new Peer({
+            const peerConfig = {
                 config: {
                     'iceServers': [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
                     ]
                 }
-            });
-            peer.on('open', () => {
+            };
+
+            const connectToHost = () => {
                 let tempConn = peer.connect('kyberboj-room-' + codeInput, { reliable: true });
                 tempConn.on('open', () => {
                     connection = tempConn;
@@ -552,6 +555,8 @@
                     document.getElementById('join-name').focus();
                     lucide.createIcons();
                 });
+                
+                // Mobilní sítě vyžadují více času k vyjednání P2P spojení
                 setTimeout(() => {
                     if(!connection || !connection.open) {
                         btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
@@ -560,8 +565,15 @@
                         lucide.createIcons();
                         if(tempConn) tempConn.close();
                     }
-                }, 3000);
-            });
+                }, 10000); 
+            };
+
+            if(!peer) {
+                peer = new Peer(peerConfig);
+                peer.on('open', connectToHost);
+            } else {
+                connectToHost();
+            }
         }
         
         function backToCodePhase() {
@@ -784,7 +796,9 @@
                 config: {
                     'iceServers': [
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
                     ]
                 }
             });
