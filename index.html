@@ -481,7 +481,8 @@
         const TEACHER_PASSWORD = "tom123";
         let activeGameCode = "";
         let mqttClient = null, connection = null, isTeacher = false;
-        let myStudentId = Math.random().toString(36).substr(2, 9); 
+        let myId = Math.random().toString(36).substr(2, 9); // Změněno jméno proměnné pro shodu s HWUNO
+        let roomTopicBase = ''; // Přidáno pro HWUNO MQTT systém
         // Spolehlivější veřejný server (EMQX)
         const MQTT_BROKER = 'wss://broker.emqx.io:8084/mqtt'; 
         let connectedStudents = {}; 
@@ -525,6 +526,13 @@
             else { inp.value += char; }
         }
 
+        // --- ROBUSTNÍ MQTT PŘIPOJENÍ Z HWUNO ---
+        window.addEventListener('beforeunload', () => {
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.publish(`${roomTopicBase}/leave`, JSON.stringify({ id: myId, isHost: isTeacher }), { qos: 0 });
+            }
+        });
+
         // --- STUDENT JOIN LOGIKA ---
         function verifyGameCode() {
             const codeInput = document.getElementById('join-code').value.trim().toUpperCase();
@@ -534,17 +542,27 @@
             lucide.createIcons();
             btn.disabled = true; document.getElementById('code-error').classList.add('hidden');
 
+            activeGameCode = codeInput;
+            roomTopicBase = `kyberboj_cz_v1/${activeGameCode}`;
+
             if (mqttClient) mqttClient.end(true);
             
-            // Unikátní ID žáka
-            const clientId = 'student_' + myStudentId;
-            mqttClient = mqtt.connect(MQTT_BROKER, { clientId: clientId });
+            const mqttOptions = {
+                clientId: 'kyber_client_' + myId,
+                clean: true,
+                connectTimeout: 5000,
+                reconnectPeriod: 2000,
+                keepalive: 30,
+                will: { topic: `${roomTopicBase}/leave`, payload: JSON.stringify({ id: myId, isHost: false }), qos: 1, retain: false }
+            };
+            
+            mqttClient = mqtt.connect(MQTT_BROKER, mqttOptions);
             
             let connTimeout = setTimeout(() => {
-                if (!connection || !connection.open) {
+                if (!mqttClient.connected) {
                     btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
                     btn.disabled = false;
-                    document.getElementById('code-error').innerText = "Hra s tímto kódem neexistuje.";
+                    document.getElementById('code-error').innerText = "Hra s tímto kódem neexistuje nebo server neodpovídá.";
                     document.getElementById('code-error').classList.remove('hidden');
                     lucide.createIcons();
                     mqttClient.end(true); mqttClient = null;
@@ -552,13 +570,15 @@
             }, 5000);
 
             mqttClient.on('connect', () => {
-                activeGameCode = codeInput;
-                mqttClient.subscribe(`kyberboj/${activeGameCode}/students`);
+                mqttClient.subscribe(`${roomTopicBase}/clients`);
+                mqttClient.subscribe(`${roomTopicBase}/client_${myId}`);
+                mqttClient.subscribe(`${roomTopicBase}/join_response_${myId}`);
+                mqttClient.subscribe(`${roomTopicBase}/leave`);
                 
-                // Přemostění na starou vnitřní logiku hry
+                // Přemostění na vnitřní herní logiku KyberBoje
                 connection = {
                     open: true,
-                    send: (data) => { if(mqttClient) mqttClient.publish(`kyberboj/${activeGameCode}/teacher`, JSON.stringify({ ...data, peer: myStudentId })); },
+                    send: (d) => { if(mqttClient) mqttClient.publish(`${roomTopicBase}/action`, JSON.stringify({ ...d, peer: myId })); },
                     listeners: {},
                     on: function(ev, cb) { this.listeners[ev] = cb; },
                     emit: function(ev, data) { if(this.listeners[ev]) this.listeners[ev](data); },
@@ -567,27 +587,45 @@
                 
                 setupStudentConnectionListening();
 
-                mqttClient.on('message', (topic, msg) => {
-                    const data = JSON.parse(msg.toString());
-                    if (data.target === 'all' || data.target === myStudentId) {
-                        if (data.type === 'pong') {
-                            clearTimeout(connTimeout);
-                            btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
-                            btn.disabled = false;
-                            document.getElementById('found-code-display').innerText = activeGameCode;
-                            document.getElementById('phase-code').classList.add('hidden');
-                            document.getElementById('phase-name').classList.remove('hidden');
-                            document.getElementById('join-name').focus();
-                            lucide.createIcons();
-                        } else {
-                            connection.emit('data', data);
-                        }
-                    }
-                });
-
-                // Zjistíme, jestli je učitel naživu
-                connection.send({ type: 'ping' });
+                // Pingnutí učitele pro ověření kódu přes oddělený request topic
+                mqttClient.publish(`${roomTopicBase}/join_request`, JSON.stringify({ id: myId, type: 'ping' }));
             });
+
+            mqttClient.on('message', (topic, msg) => {
+                const data = JSON.parse(msg.toString());
+                
+                if (topic.endsWith(`/join_response_${myId}`)) {
+                    if (data.type === 'pong') {
+                        clearTimeout(connTimeout);
+                        btn.innerHTML = '<span>Ověřit kód</span> <i data-lucide="arrow-right" class="w-6 h-6"></i>';
+                        btn.disabled = false;
+                        document.getElementById('found-code-display').innerText = activeGameCode;
+                        document.getElementById('phase-code').classList.add('hidden');
+                        document.getElementById('phase-name').classList.remove('hidden');
+                        document.getElementById('join-name').focus();
+                        lucide.createIcons();
+                    } else if (data.success) {
+                        document.getElementById('display-student-name').innerText = data.name;
+                        showScreen('screen-student-lobby');
+                    } else {
+                        document.getElementById('name-error').innerText = data.reason;
+                        document.getElementById('name-error').classList.remove('hidden');
+                        const btnJoin = document.getElementById('btn-join');
+                        btnJoin.innerHTML = '<span>Vstoupit do hry</span> <i data-lucide="zap" class="w-6 h-6"></i>'; 
+                        btnJoin.disabled = false;
+                        lucide.createIcons();
+                    }
+                } else if (topic.endsWith('/leave')) {
+                    if (data.isHost) {
+                        alert("Učitel ukončil hru (Hostitel se odpojil).");
+                        location.reload();
+                    }
+                } else if (topic.endsWith('/clients') || topic.endsWith(`/client_${myId}`)) {
+                    if (connection) connection.emit('data', data);
+                }
+            });
+            
+            mqttClient.on('error', (err) => console.error("Chyba MQTT: ", err));
         }
         
         function backToCodePhase() {
@@ -595,6 +633,7 @@
             if(mqttClient) { mqttClient.end(true); mqttClient = null; }
             document.getElementById('phase-name').classList.add('hidden');
             document.getElementById('phase-code').classList.remove('hidden');
+            document.getElementById('name-error').classList.add('hidden');
         }
 
         function studentJoinGame() {
@@ -605,21 +644,18 @@
             const btn = document.getElementById('btn-join');
             btn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i> Připojuji...'; lucide.createIcons(); btn.disabled = true;
 
-            if(connection && connection.open) connection.send({ type: 'student_join', name: nameInput });
-            else { alert("Spojení ztraceno."); backToCodePhase(); btn.innerHTML = 'Vstoupit do hry'; btn.disabled = false; }
+            if(mqttClient && mqttClient.connected) {
+                mqttClient.publish(`${roomTopicBase}/join_request`, JSON.stringify({ id: myId, type: 'join', name: nameInput }));
+            } else { 
+                alert("Spojení ztraceno. Zkuste to znovu."); backToCodePhase(); 
+                btn.innerHTML = '<span>Vstoupit do hry</span> <i data-lucide="zap" class="w-6 h-6"></i>'; 
+                btn.disabled = false; lucide.createIcons(); 
+            }
         }
         
         function setupStudentConnectionListening() {
             connection.on('data', data => {
-                if(data.type === 'join_error') {
-                    document.getElementById('name-error').innerText = data.message;
-                    document.getElementById('name-error').classList.remove('hidden');
-                    document.getElementById('btn-join').innerHTML = '<span>Vstoupit do hry</span> <i data-lucide="zap" class="w-6 h-6"></i>'; document.getElementById('btn-join').disabled = false;
-                    lucide.createIcons();
-                } else if (data.type === 'join_success') {
-                    document.getElementById('display-student-name').innerText = data.name;
-                    showScreen('screen-student-lobby');
-                } else if (data.type === 'assign_team') {
+                if (data.type === 'assign_team') {
                     const box = document.getElementById('student-lobby-box'), spin = document.getElementById('student-spinner'), t = document.getElementById('student-status-title');
                     myTeam = data.team;
                     
@@ -807,45 +843,65 @@
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; activeGameCode = '';
             for(let i=0;i<4;i++) activeGameCode += chars.charAt(Math.floor(Math.random()*chars.length));
             
-            // Okamžité zobrazení kódu bez čekání na připojení k serveru
             document.getElementById('display-game-code').innerText = activeGameCode;
             document.getElementById('fullscreen-code-text').innerText = activeGameCode;
             
+            roomTopicBase = `kyberboj_cz_v1/${activeGameCode}`;
+            
             if(mqttClient) mqttClient.end(true);
             
-            // Unikátní ID pro stabilitu spojení
-            const clientId = 'teacher_' + Math.random().toString(16).substr(2, 8);
-            mqttClient = mqtt.connect(MQTT_BROKER, { clientId: clientId });
+            const mqttOptions = {
+                clientId: 'kyber_host_' + myId,
+                clean: true,
+                connectTimeout: 5000,
+                reconnectPeriod: 2000,
+                keepalive: 30,
+                will: { topic: `${roomTopicBase}/leave`, payload: JSON.stringify({ id: myId, isHost: true }), qos: 1, retain: false }
+            };
+            
+            mqttClient = mqtt.connect(MQTT_BROKER, mqttOptions);
 
             mqttClient.on('connect', () => {
-                // Učitel naslouchá žákům
-                mqttClient.subscribe(`kyberboj/${activeGameCode}/teacher`);
+                mqttClient.subscribe(`${roomTopicBase}/action`);
+                mqttClient.subscribe(`${roomTopicBase}/join_request`);
+                mqttClient.subscribe(`${roomTopicBase}/leave`);
             });
 
             mqttClient.on('message', (topic, msg) => {
                 const data = JSON.parse(msg.toString());
-                const peerId = data.peer; // Unikátní ID odesílatele (žáka)
 
-                if (data.type === 'ping') {
-                    // Žák ověřuje existenci hry, poslat potvrzení (pong) přímo jemu
-                    mqttClient.publish(`kyberboj/${activeGameCode}/students`, JSON.stringify({ type: 'pong', target: peerId }));
-                } else if (data.type === 'student_join') {
-                    if(Object.values(connectedStudents).some(s => s.name.toLowerCase() === data.name.toLowerCase())) {
-                        mqttClient.publish(`kyberboj/${activeGameCode}/students`, JSON.stringify({ type: 'join_error', message: 'Jméno je již zabrané. Zvol si prosím jiné!', target: peerId }));
-                    } else {
-                        // Přemostění na starou vnitřní logiku učitele
-                        const studentConn = {
-                            open: true,
-                            send: (d) => mqttClient.publish(`kyberboj/${activeGameCode}/students`, JSON.stringify({ ...d, target: peerId }))
-                        };
-                        connectedStudents[peerId] = { connection: studentConn, name: data.name, team: null, totalScore: 0 };
-                        studentConn.send({ type: 'join_success', name: data.name });
-                        updateTeacherUI();
+                if (topic.endsWith('/join_request')) {
+                    if (data.type === 'ping') {
+                        mqttClient.publish(`${roomTopicBase}/join_response_${data.id}`, JSON.stringify({ type: 'pong' }));
+                    } else if (data.type === 'join') {
+                        if(Object.values(connectedStudents).some(s => s.name.toLowerCase() === data.name.toLowerCase())) {
+                            mqttClient.publish(`${roomTopicBase}/join_response_${data.id}`, JSON.stringify({ success: false, reason: 'Jméno je již zabrané. Zvol si prosím jiné!' }));
+                        } else {
+                            const peerId = data.id;
+                            const studentConn = {
+                                open: true,
+                                send: (d) => mqttClient.publish(`${roomTopicBase}/client_${peerId}`, JSON.stringify(d))
+                            };
+                            connectedStudents[peerId] = { connection: studentConn, name: data.name, team: null, totalScore: 0 };
+                            mqttClient.publish(`${roomTopicBase}/join_response_${peerId}`, JSON.stringify({ success: true, name: data.name }));
+                            updateTeacherUI();
+                        }
                     }
-                } else if (data.type === 'submit_answer') {
-                    handleStudentAnswer(peerId, data.answer, false);
-                } else if (data.type === 'submit_answer_number') {
-                    handleStudentAnswer(peerId, data.answer, true);
+                } else if (topic.endsWith('/action')) {
+                    const peerId = data.peer;
+                    if (data.type === 'submit_answer') {
+                        handleStudentAnswer(peerId, data.answer, false);
+                    } else if (data.type === 'submit_answer_number') {
+                        handleStudentAnswer(peerId, data.answer, true);
+                    }
+                } else if (topic.endsWith('/leave')) {
+                    if (!data.isHost) {
+                        const peerId = data.id;
+                        if (connectedStudents[peerId]) {
+                            delete connectedStudents[peerId];
+                            updateTeacherUI(); // Žák zmizí z lobby ihned po zavření okna / pádu netu
+                        }
+                    }
                 }
             });
 
@@ -929,7 +985,11 @@
         }
 
         // --- HERNÍ CYKLUS (UČITEL) ---
-        function broadcast(data) { Object.values(connectedStudents).forEach(s => { if(s.connection.open) s.connection.send(data); }); }
+        function broadcast(data) { 
+            if(mqttClient && mqttClient.connected) {
+                mqttClient.publish(`${roomTopicBase}/clients`, JSON.stringify(data));
+            }
+        }
         
         function teacherStartGame() {
             const keys = Object.keys(connectedStudents);
